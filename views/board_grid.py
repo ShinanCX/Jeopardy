@@ -100,7 +100,11 @@ def board_grid_view(
 
     def recompute():
         usable = (page.width or 1200)
-        usable -= 2 * (page.padding or 0)
+        try:
+            pad = page.padding or 0
+        except RuntimeError:
+            pad = 0
+        usable -= 2 * pad
         usable -= 2 * 8  # host.padding
 
         col_w = int(max(MIN_COL_W, (usable - (cols - 1) * GAP) / cols))

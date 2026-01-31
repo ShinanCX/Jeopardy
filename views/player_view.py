@@ -50,7 +50,11 @@ def player_view(page: ft.Page, state: AppState) -> ft.Container:
         n = max(1, len(state.players))
 
         usable = page.width or 1200
-        usable -= 2 * (page.padding or 0)
+        try:
+            pad = page.padding or 0
+        except RuntimeError:
+            pad = 0
+        usable -= 2 * pad
         usable -= 2 * 8  # host.padding
         usable -= 2 * 1 # host.border
         usable -= 2  # Sicherheitsmarge
