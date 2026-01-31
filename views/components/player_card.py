@@ -44,7 +44,7 @@ class PlayerCard(ft.Container):
                 ft.Container(
                     expand=1,
                     alignment=ft.Alignment.CENTER,
-                    content=ft.Text(str(self.score), size=32, weight=ft.FontWeight.BOLD),
+                    content=None,
                 ),
                 ft.Container(alignment=ft.Alignment.CENTER, content=self._badge(f"Punkte: {self.score}")),
             ],

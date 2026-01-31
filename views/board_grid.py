@@ -5,7 +5,9 @@ from app_state import AppState
 def board_grid_view(
     page: ft.Page,
     state: AppState,
-    on_pick_tile,
+    on_pick_tile=None,
+    *,
+    can_pick_tile: bool = True,
 ) -> ft.Control:
     """
     Rendert das Jeopardy-Board (Header + Tiles) in einem eigenen Host-Container:
@@ -52,7 +54,7 @@ def board_grid_view(
             tile = state.board.categories[cat_i].tiles[tile_i]
 
             def _pick(_):
-                if tile.used:
+                if tile.used or (not can_pick_tile) or on_pick_tile is None:
                     return
                 on_pick_tile(cat_i, tile_i)
 
@@ -62,8 +64,8 @@ def board_grid_view(
                 alignment=ft.Alignment.CENTER,
                 content=ft.Button(
                     content=str(tile.value),
-                    on_click=_pick,
-                    disabled=tile.used,
+                    on_click=_pick if can_pick_tile else None,
+                    disabled=tile.used or (not can_pick_tile),
                     style=tile_btn_style,
                     width=col_w,
                     height=CELL_H,

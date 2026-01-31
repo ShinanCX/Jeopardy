@@ -10,6 +10,27 @@ class Player:
     score: int = 0
     is_turn: bool = False
 
+class Capabilities:
+    """UI/Action permissions derived from role + current game state."""
+    can_pick_tile: bool = False  # Board tiles clickable (host only)
+    can_select_turn: bool = False # aktiven Spieler wechseln
+    can_award_points: bool = False # Richtig/Falsch, Punkte
+    can_simulate_buzzer: bool = False # Buzzer-Sim Buttons / Answerer pick
+
+
+def compute_capabilities(state: "AppState", role: str) -> Capabilities:
+    role = (role or "host").lower()
+    caps = Capabilities()
+
+    # Host-only interactions for now
+    if role == "host":
+        caps.can_pick_tile = state.screen == "board"
+        caps.can_select_turn = state.screen == "board"
+
+        caps.can_award_points = state.screen == "question"
+        caps.can_simulate_buzzer = state.screen == "question"
+    return caps
+
 
 @dataclass
 class AppState:
@@ -93,3 +114,15 @@ class AppState:
         """Runde beenden und Substate zurücksetzen."""
         self.buzzer_open = False
         self.buzzed_queue = []
+
+    def snapshot(self) -> dict:
+        return {
+            "screen": self.screen,
+            "selected": getattr(self, "selected", None),
+        }
+
+    def apply_snapshot(self, snap: dict) -> None:
+        if "screen" in snap:
+            self.screen = snap["screen"]
+        if "selected" in snap:
+            self.selected = snap["selected"]

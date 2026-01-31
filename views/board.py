@@ -1,18 +1,24 @@
 import flet as ft
-from app_state import AppState
+
+from app_state import AppState, Capabilities, compute_capabilities
 
 from views.player_view import player_view
 from views.board_grid import board_grid_view
 from views.topbar import topbar_view
 
 
-def board_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
+def board_view(page: ft.Page, state: AppState, rerender, broadcast_state, caps: Capabilities | None = None) -> (
+        ft.Control):
     if state.board is None:
         state.screen = "lobby"
         rerender()
         return ft.Text("Kein Board geladen – zurück zur Lobby.")
 
     state.ensure_players()
+
+    if caps is None:
+        role = (page.session.store.get("role") or "host")
+        caps = compute_capabilities(state, role)
 
     def go_lobby(_):
         state.screen = "lobby"
@@ -24,13 +30,21 @@ def board_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
     )
 
     def on_pick_tile(cat_i: int, tile_i: int):
+        if not caps.can_pick_tile:
+            return
         state.selected = (cat_i, tile_i)
         state.start_question_round()
         state.screen = "question"
         rerender()
+        broadcast_state()
 
-    board_host = board_grid_view(page, state, on_pick_tile=on_pick_tile)
-    player_host = player_view(page, state)  # expand=1
+    board_host = board_grid_view(
+        page,
+        state,
+        on_pick_tile=on_pick_tile,
+        can_pick_tile=caps.can_pick_tile,
+    )
+    player_host = player_view(page, state, can_select_turn=caps.can_select_turn)
 
     def recompute_all():
         # Board recompute

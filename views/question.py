@@ -1,10 +1,11 @@
 import flet as ft
 
-from app_state import AppState
+from app_state import AppState, Capabilities, compute_capabilities
 from views.topbar import topbar_view
 
 
-def question_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
+def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, caps: Capabilities | None = None) -> (
+        ft.Control):
     # Guard rails
     if state.board is None or state.selected is None:
         state.screen = "board"
@@ -12,6 +13,9 @@ def question_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
         return ft.Text("Keine Frage ausgewählt.")
 
     state.ensure_players()
+    if caps is None:
+        role = page.session.store.get("role") or "host"
+        caps = compute_capabilities(state, role)
 
     cat_i, tile_i = state.selected
     cat = state.board.categories[cat_i]
@@ -38,12 +42,13 @@ def question_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
         answerer_name_text.value = a.name
         buzzer_state_text.value = "• Buzzers offen" if state.buzzer_open else "• Nur Turn-Owner"
 
-        correct_btn.content = f"✅ Richtig ({a.name})"
-        wrong_btn.content = f"❌ Falsch ({a.name})"
+        if caps.can_award_points:
+            correct_btn.content = f"✅ Richtig ({a.name})"
+            wrong_btn.content = f"❌ Falsch ({a.name})"
 
     def refresh_buzzer_controls():
         """Show/hide buzzer simulation controls depending on buzzer_open."""
-        if not state.buzzer_open:
+        if not caps.can_simulate_buzzer:
             buzzer_holder.content = ft.Container()
             return
 
@@ -87,20 +92,25 @@ def question_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
     def reveal(_):
         answer_text.value = f"Antwort: {tile.question.answer}"
         page.update()
+        broadcast_state()
 
     def back_without_use(_):
         state.selected = None
         state.end_question_round()
         state.screen = "board"
         rerender()
+        broadcast_state()
 
     def finish_round_and_back():
         tile.used = True
         state.selected = None
         state.end_question_round()
         state.screen = "board"
+        broadcast_state()
 
     def host_correct(_):
+        if not caps.can_award_points:
+            return
         a = state.players[state.question_answerer_index]
         a.score += tile.value
 
@@ -111,6 +121,8 @@ def question_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
         rerender()
 
     def host_wrong(_):
+        if not caps.can_award_points:
+            return
         a = state.players[state.question_answerer_index]
         a.score -= tile.value
 
@@ -144,6 +156,18 @@ def question_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
         ),
     )
 
+    host_controls = ft.Container(
+        visible=caps.can_award_points,
+        content=ft.Column(
+            controls=[
+                ft.Text("Host-Steuerung", weight=ft.FontWeight.BOLD),
+                ft.Row(controls=[correct_btn, wrong_btn], wrap=True),
+            ],
+            tight=True,
+            spacing=8,
+        ),
+    )
+
     # --- question card ---
     card = ft.Container(
         padding=16,
@@ -166,14 +190,7 @@ def question_view(page: ft.Page, state: AppState, rerender) -> ft.Control:
                     wrap=True,
                 ),
                 ft.Container(height=8),
-                ft.Text("Host-Steuerung", weight=ft.FontWeight.BOLD),
-                ft.Row(
-                    controls=[
-                        correct_btn,
-                        wrong_btn,
-                    ],
-                    wrap=True,
-                ),
+                host_controls,
             ],
             tight=True,
             spacing=8,

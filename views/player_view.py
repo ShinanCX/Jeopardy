@@ -4,7 +4,7 @@ from app_state import AppState
 from views.components.player_card import PlayerCard
 
 
-def player_view(page: ft.Page, state: AppState) -> ft.Container:
+def player_view(page: ft.Page, state: AppState, *, can_select_turn: bool = True) -> ft.Container:
     state.ensure_players()
 
     MIN_PLAYER_W = 220
@@ -28,7 +28,10 @@ def player_view(page: ft.Page, state: AppState) -> ft.Container:
         cards = []
 
         for i, p in enumerate(state.players):
+
             def select_turn(i=i):
+                if not can_select_turn:
+                    return
                 state.set_turn(i)
                 recompute()
                 page.update()  # nur optisch; Screen bleibt gleich
@@ -37,7 +40,7 @@ def player_view(page: ft.Page, state: AppState) -> ft.Container:
                 name=p.name,
                 score=p.score,
                 is_active=p.is_turn,
-                on_select=select_turn,
+                on_select=select_turn if can_select_turn else None,
             )
             c.width = card_width
             c.expand = 1
