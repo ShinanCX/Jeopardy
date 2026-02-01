@@ -11,22 +11,11 @@ from views.board import board_view
 from views.question import question_view
 
 
-# AppState-Screens bleiben wie gehabt, URLs werden semantischer
-_SCREEN_TO_ROUTE = {
-    "lobby": "lobby",
-    "board": "game",
-    "question": "question",
-}
-
-_ROUTE_TO_SCREEN = {
-    "lobby": "lobby",
-    "game": "board",
-    "question": "question",
-}
+_SCREEN_TO_ROUTE = {"lobby": "lobby", "board": "game", "question": "question"}
+_ROUTE_TO_SCREEN = {"lobby": "lobby", "game": "board", "question": "question"}
 
 
 def _store(page: ft.Page):
-    # Flet 0.80.x: session.store ist der KV-Store
     return page.session.store
 
 
@@ -37,9 +26,9 @@ def _ensure_defaults(page: ft.Page):
     if s.get("player_id") is None:
         s.set("player_id", str(uuid.uuid4()))
     if s.get("lobby_id") is None:
-        # Später ersetzt durch echten Lobby-Code-Join
-        # s.set("lobby_id", str(uuid.uuid4()))
+        # DEV: Host & Player müssen dieselbe Lobby teilen, sonst kein Sync
         s.set("lobby_id", "dev")
+
 
 def _get_role(page: ft.Page) -> str:
     role = (_store(page).get("role") or "host").lower()
@@ -57,27 +46,15 @@ def _route_for_screen(page: ft.Page, screen: str) -> str:
 
 
 def setup_router(page: ft.Page, state: AppState):
-    """
-    Router verbindet Flet 0.80.x routing (push_route + views stack)
-    mit dem bestehenden AppState.
-
-    Zusätzlich:
-    - shared state sync via PubSub: Host broadcastet snapshots, Player applied.
-    """
-
     _ensure_defaults(page)
 
     def broadcast_state():
-        """
-        Host broadcastet den aktuellen minimalen Snapshot an alle Clients.
-        """
         role = _get_role(page)
         if role != "host":
             return
 
         lobby_id = _get_lobby_id(page)
         snap = state.snapshot()
-
         lobby = update_lobby(lobby_id, snap)
 
         msg = {
@@ -86,11 +63,9 @@ def setup_router(page: ft.Page, state: AppState):
             "version": lobby.version,
             "data": lobby.data,
         }
-        # PubSub payload am besten als JSON-string senden
         page.pubsub.send_all(json.dumps(msg))
 
     def rerender():
-        # Übersetzt "state.screen changed" => Route change
         asyncio.create_task(page.push_route(_route_for_screen(page, state.screen)))
 
     def _build_screen_control() -> ft.Control:
@@ -98,22 +73,18 @@ def setup_router(page: ft.Page, state: AppState):
         caps = compute_capabilities(state, role)
 
         if state.screen == "lobby":
-            return lobby_view(page, state, rerender)
+            return lobby_view(page, state, rerender, broadcast_state=broadcast_state)
 
         if state.screen == "board":
             return board_view(
-                page,
-                state,
-                rerender,
+                page, state, rerender,
                 caps=caps,
                 broadcast_state=broadcast_state,
             )
 
         if state.screen == "question":
             return question_view(
-                page,
-                state,
-                rerender,
+                page, state, rerender,
                 caps=caps,
                 broadcast_state=broadcast_state,
             )
@@ -122,7 +93,6 @@ def setup_router(page: ft.Page, state: AppState):
 
     def route_change(_):
         route = page.route or "/"
-
         if route == "/":
             asyncio.create_task(page.push_route(_route_for_screen(page, "lobby")))
             return
@@ -133,39 +103,31 @@ def setup_router(page: ft.Page, state: AppState):
 
         if role not in {"host", "player"}:
             role = "host"
-
-        # Rolle in store normalisieren
         _store(page).set("role", role)
 
-        # Route => Screen
         state.screen = _ROUTE_TO_SCREEN.get(tail, "lobby")
+
+        # Optional Guard: wenn /game ohne Board -> zurück in Lobby
+        if state.screen == "board" and getattr(state, "board", None) is None:
+            state.screen = "lobby"
+            asyncio.create_task(page.push_route(_route_for_screen(page, "lobby")))
+            return
 
         page.views.clear()
         page.views.append(
-            ft.View(
-                route=route,
-                controls=[_build_screen_control()],
-                padding=16,
-            )
+            ft.View(route=route, controls=[_build_screen_control()], padding=16)
         )
         page.update()
 
     def view_pop(e: ft.ViewPopEvent):
-        # Standard pattern: view stack + route sync
         if page.views:
             page.views.pop()
-
         if page.views:
-            top = page.views[-1]
-            asyncio.create_task(page.push_route(top.route))
+            asyncio.create_task(page.push_route(page.views[-1].route))
         else:
             asyncio.create_task(page.push_route(_route_for_screen(page, "lobby")))
 
     def _on_pubsub(message: str):
-        """
-        Player empfängt snapshots und zieht UI nach.
-        Host ignoriert (Host ist source of truth).
-        """
         try:
             msg = json.loads(message)
         except Exception:
@@ -174,28 +136,25 @@ def setup_router(page: ft.Page, state: AppState):
         if msg.get("type") != "lobby_state":
             return
 
-        lobby_id = _get_lobby_id(page)
-        if msg.get("lobby_id") != lobby_id:
+        if msg.get("lobby_id") != _get_lobby_id(page):
             return
 
-        role = _get_role(page)
-        if role == "host":
+        if _get_role(page) == "host":
             return
 
         data = msg.get("data") or {}
         state.apply_snapshot(data)
 
-        # Route an Screen anpassen
-        asyncio.create_task(page.push_route(_route_for_screen(page, state.screen)))
+        async def _sync_route():
+            await page.push_route(_route_for_screen(page, state.screen))
 
-    # Subscribe nur einmal
+        page.run_task(_sync_route)
+
     page.pubsub.subscribe(_on_pubsub)
-
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    # Optional: Client beim Connect direkt auf shared lobby-state "ziehen"
-    # (hilft bei Reload / späterem Join)
+    # Optional: beim Join direkt aktuellen Lobby-State ziehen
     try:
         lobby = get_lobby(_get_lobby_id(page))
         if lobby.data:

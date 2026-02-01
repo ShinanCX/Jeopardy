@@ -115,14 +115,135 @@ class AppState:
         self.buzzer_open = False
         self.buzzed_queue = []
 
+        # --- Shared-state sync helpers (server -> clients) ---
+
+    @staticmethod
+    def _board_to_dict(board: Optional[Board]) -> Optional[dict]:
+        if board is None:
+            return None
+        return {
+            "categories": [
+                {
+                    "title": c.title,
+                    "tiles": [
+                        {
+                            "value": t.value,
+                            "used": t.used,
+                            "question": {
+                                "prompt": t.question.prompt,
+                                "answer": t.question.answer,
+                            },
+                        }
+                        for t in c.tiles
+                    ],
+                }
+                for c in board.categories
+            ]
+        }
+
+    @staticmethod
+    def _board_from_dict(data: Optional[dict]) -> Optional[Board]:
+        if not data:
+            return None
+        from models.models import Board, Category, Tile, Question
+
+        categories = []
+        for c in data.get("categories", []):
+            tiles = []
+            for t in c.get("tiles", []):
+                q = t.get("question") or {}
+                tiles.append(
+                    Tile(
+                        value=int(t.get("value", 0)),
+                        used=bool(t.get("used", False)),
+                        question=Question(
+                            prompt=str(q.get("prompt", "")),
+                            answer=str(q.get("answer", "")),
+                        ),
+                    )
+                )
+            categories.append(Category(title=str(c.get("title", "")), tiles=tiles))
+        return Board(categories=categories)
+
+    @staticmethod
+    def _players_to_list(players: List[Player]) -> list[dict]:
+        return [{"name": p.name, "score": p.score, "is_turn": p.is_turn} for p in players]
+
+    @staticmethod
+    def _players_from_list(data: Optional[list]) -> List[Player]:
+        if not data:
+            return []
+        out: List[Player] = []
+        for p in data:
+            out.append(
+                Player(
+                    name=str(p.get("name", "")),
+                    score=int(p.get("score", 0)),
+                    is_turn=bool(p.get("is_turn", False)),
+                )
+            )
+        return out
+
     def snapshot(self) -> dict:
+        """Minimaler, serialisierbarer Zustand für Multiplayer-Sync."""
         return {
             "screen": self.screen,
-            "selected": getattr(self, "selected", None),
+            "board": self._board_to_dict(self.board),
+            "selected": self.selected,
+            "max_players": self.max_players,
+            "players": self._players_to_list(self.players),
+            "active_player_index": self.active_player_index,
+            "question_turn_owner_index": self.question_turn_owner_index,
+            "question_answerer_index": self.question_answerer_index,
+            "buzzer_open": self.buzzer_open,
+            "buzzed_queue": list(self.buzzed_queue),
         }
 
     def apply_snapshot(self, snap: dict) -> None:
+        """Übernimmt einen Snapshot (vom Host) in den lokalen State."""
         if "screen" in snap:
             self.screen = snap["screen"]
+
+        if "board" in snap:
+            self.board = self._board_from_dict(snap.get("board"))
+
         if "selected" in snap:
-            self.selected = snap["selected"]
+            self.selected = snap.get("selected")
+
+        if "max_players" in snap and snap["max_players"] is not None:
+            try:
+                self.max_players = int(snap["max_players"])
+            except Exception:
+                pass
+
+        if "players" in snap:
+            self.players = self._players_from_list(snap.get("players"))
+
+        if "active_player_index" in snap and snap["active_player_index"] is not None:
+            try:
+                self.active_player_index = int(snap["active_player_index"])
+            except Exception:
+                self.active_player_index = 0
+            # is_turn flags konsistent setzen
+            self.ensure_players()
+
+        if "question_turn_owner_index" in snap and snap["question_turn_owner_index"] is not None:
+            try:
+                self.question_turn_owner_index = int(snap["question_turn_owner_index"])
+            except Exception:
+                pass
+
+        if "question_answerer_index" in snap and snap["question_answerer_index"] is not None:
+            try:
+                self.question_answerer_index = int(snap["question_answerer_index"])
+            except Exception:
+                pass
+
+        if "buzzer_open" in snap:
+            self.buzzer_open = bool(snap["buzzer_open"])
+
+        if "buzzed_queue" in snap and snap["buzzed_queue"] is not None:
+            try:
+                self.buzzed_queue = [int(x) for x in snap["buzzed_queue"]]
+            except Exception:
+                self.buzzed_queue = []
