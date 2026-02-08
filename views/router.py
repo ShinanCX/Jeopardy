@@ -1,10 +1,10 @@
-import asyncio
 import json
 import uuid
 import flet as ft
 
 from app_state import AppState, compute_capabilities
 from lobby_store import get_lobby, update_lobby
+from ui.layout import LAYOUT
 
 from views.lobby import lobby_view
 from views.board import board_view
@@ -14,6 +14,11 @@ from views.question import question_view
 _SCREEN_TO_ROUTE = {"lobby": "lobby", "board": "game", "question": "question"}
 _ROUTE_TO_SCREEN = {"lobby": "lobby", "game": "board", "question": "question"}
 
+def push_route(page: ft.Page, route: str):
+    async def _do():
+        await page.push_route(route)
+
+    page.run_task(_do)
 
 def _store(page: ft.Page):
     return page.session.store
@@ -66,7 +71,7 @@ def setup_router(page: ft.Page, state: AppState):
         page.pubsub.send_all(json.dumps(msg))
 
     def rerender():
-        asyncio.create_task(page.push_route(_route_for_screen(page, state.screen)))
+        push_route(page, _route_for_screen(page, state.screen))
 
     def _build_screen_control() -> ft.Control:
         role = _get_role(page)
@@ -94,7 +99,7 @@ def setup_router(page: ft.Page, state: AppState):
     def route_change(_):
         route = page.route or "/"
         if route == "/":
-            asyncio.create_task(page.push_route(_route_for_screen(page, "lobby")))
+            push_route(page, _route_for_screen(page, "lobby"))
             return
 
         parts = [p for p in route.split("/") if p]
@@ -110,12 +115,12 @@ def setup_router(page: ft.Page, state: AppState):
         # Optional Guard: wenn /game ohne Board -> zurück in Lobby
         if state.screen == "board" and getattr(state, "board", None) is None:
             state.screen = "lobby"
-            asyncio.create_task(page.push_route(_route_for_screen(page, "lobby")))
+            push_route(page, _route_for_screen(page, "lobby"))
             return
 
         page.views.clear()
         page.views.append(
-            ft.View(route=route, controls=[_build_screen_control()], padding=16)
+            ft.View(route=route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
         )
         page.update()
 
@@ -123,9 +128,9 @@ def setup_router(page: ft.Page, state: AppState):
         if page.views:
             page.views.pop()
         if page.views:
-            asyncio.create_task(page.push_route(page.views[-1].route))
+            push_route(page, page.views[-1].route)
         else:
-            asyncio.create_task(page.push_route(_route_for_screen(page, "lobby")))
+            push_route(page, _route_for_screen(page, "lobby"))
 
     def _on_pubsub(message: str):
         try:
@@ -145,10 +150,22 @@ def setup_router(page: ft.Page, state: AppState):
         data = msg.get("data") or {}
         state.apply_snapshot(data)
 
-        async def _sync_route():
-            await page.push_route(_route_for_screen(page, state.screen))
+        async def _apply_and_refresh():
+            target = _route_for_screen(page, state.screen)
 
-        page.run_task(_sync_route)
+            # Wenn Screen/Route gewechselt hat: normal navigieren (triggert route_change -> rebuild)
+            if page.route != target:
+                await page.push_route(target)
+                return
+
+            # Route ist gleich -> trotzdem UI neu bauen, sonst sieht der Client nichts
+            page.views.clear()
+            page.views.append(
+                ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
+            )
+            page.update()
+
+        page.run_task(_apply_and_refresh)
 
     page.pubsub.subscribe(_on_pubsub)
     page.on_route_change = route_change
@@ -159,6 +176,6 @@ def setup_router(page: ft.Page, state: AppState):
         lobby = get_lobby(_get_lobby_id(page))
         if lobby.data:
             state.apply_snapshot(lobby.data)
-            asyncio.create_task(page.push_route(_route_for_screen(page, state.screen)))
+            push_route(page, _route_for_screen(page, state.screen))
     except Exception:
         pass

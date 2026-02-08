@@ -1,5 +1,6 @@
 import flet as ft
 from app_state import AppState
+from ui.layout import LAYOUT
 
 
 def board_grid_view(
@@ -102,10 +103,7 @@ def board_grid_view(
 
     def recompute():
         usable = (page.width or 1200)
-        try:
-            pad = page.padding or 0
-        except RuntimeError:
-            pad = 0
+        pad = LAYOUT.page_padding
         usable -= 2 * pad
         usable -= 2 * 8  # host.padding
 

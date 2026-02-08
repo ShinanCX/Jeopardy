@@ -32,6 +32,9 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
 
     buzzer_holder = ft.Container()  # will receive content dynamically
 
+    def refresh_answer():
+        answer_text.value = f"{tile.question.answer}" if state.question_answer_revealed else ""
+
     def refresh_status():
         """Refresh answerer labels + host button captions."""
         state.ensure_players()
@@ -53,10 +56,19 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
             return
 
         def pick_answerer(i: int):
-            state.set_answerer(i)
+            if not state.buzzer_open and state.question_answerer_index is not None:
+                return
+
+            if state.buzzer_open:
+                if i not in state.buzzed_queue:
+                    state.buzzed_queue.append(i)
+                state.set_answerer(state.buzzed_queue[0])
+                state.buzzer_open = False
+
             refresh_status()
             refresh_buzzer_controls()
             page.update()
+            broadcast_state()
 
         buzzer_holder.content = ft.Container(
             padding=12,
@@ -90,7 +102,8 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
 
     # --- actions ---
     def reveal(_):
-        answer_text.value = f"Antwort: {tile.question.answer}"
+        state.question_answer_revealed = True
+        refresh_answer()
         page.update()
         broadcast_state()
 
@@ -133,6 +146,8 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
         refresh_buzzer_controls()
         page.update()
 
+        broadcast_state()
+
     # wire host button handlers (now that functions exist)
     correct_btn.on_click = host_correct
     wrong_btn.on_click = host_wrong
@@ -161,6 +176,13 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
         content=ft.Column(
             controls=[
                 ft.Text("Host-Steuerung", weight=ft.FontWeight.BOLD),
+                ft.Row(
+                    controls=[
+                        ft.OutlinedButton("Antwort zeigen", on_click=reveal),
+                        ft.TextButton("Zurück (ohne verbrauchen)", on_click=back_without_use),
+                    ],
+                    wrap=True,
+                ),
                 ft.Row(controls=[correct_btn, wrong_btn], wrap=True),
             ],
             tight=True,
@@ -182,14 +204,6 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
                 ft.Container(height=10),
                 answer_text,
                 ft.Container(height=10),
-                ft.Row(
-                    controls=[
-                        ft.OutlinedButton("Antwort zeigen", on_click=reveal),
-                        ft.TextButton("Zurück (ohne verbrauchen)", on_click=back_without_use),
-                    ],
-                    wrap=True,
-                ),
-                ft.Container(height=8),
                 host_controls,
             ],
             tight=True,
@@ -198,6 +212,7 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
     )
 
     # initial fill
+    refresh_answer()
     refresh_status()
     refresh_buzzer_controls()
 

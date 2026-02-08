@@ -43,6 +43,7 @@ class AppState:
     active_player_index: int = 0  # <-- neu
     question_turn_owner_index: int = 0  # wer hat die Frage ausgewählt (Turn)
     question_answerer_index: int = 0  # wer darf gerade antworten (kann wechseln)
+    question_answer_revealed: bool = False
     buzzer_open: bool = False  # sind Buzzers offen?
     buzzed_queue: list[int] = field(default_factory=list)  # später live; jetzt vorbereitet
 
@@ -95,6 +96,7 @@ class AppState:
         self.ensure_players()
         self.question_turn_owner_index = self.active_player_index
         self.question_answerer_index = self.active_player_index
+        self.question_answer_revealed = False
         self.buzzer_open = False
         self.buzzed_queue = []
 
@@ -114,6 +116,7 @@ class AppState:
         """Runde beenden und Substate zurücksetzen."""
         self.buzzer_open = False
         self.buzzed_queue = []
+        self.question_answer_revealed = False
 
         # --- Shared-state sync helpers (server -> clients) ---
 
@@ -195,6 +198,7 @@ class AppState:
             "active_player_index": self.active_player_index,
             "question_turn_owner_index": self.question_turn_owner_index,
             "question_answerer_index": self.question_answerer_index,
+            "question_answer_revealed": self.question_answer_revealed,
             "buzzer_open": self.buzzer_open,
             "buzzed_queue": list(self.buzzed_queue),
         }
@@ -238,6 +242,9 @@ class AppState:
                 self.question_answerer_index = int(snap["question_answerer_index"])
             except Exception:
                 pass
+
+        if "question_answer_revealed" in snap:
+            self.question_answer_revealed = bool(snap["question_answer_revealed"])
 
         if "buzzer_open" in snap:
             self.buzzer_open = bool(snap["buzzer_open"])

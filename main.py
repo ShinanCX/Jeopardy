@@ -1,10 +1,10 @@
 import mimetypes
-import asyncio
 import uuid
 import flet as ft
 
 from app_state import AppState
-from views.router import setup_router
+from ui.layout import LAYOUT
+from views.router import setup_router, push_route
 
 # Fix für Flutter Web ES-Modules (.mjs)
 mimetypes.add_type("application/javascript", ".mjs")
@@ -14,7 +14,7 @@ mimetypes.add_type("application/wasm", ".wasm")
 
 def main(page: ft.Page):
     page.title = "Jeopardy (Flet)"
-    page.padding = 16
+    page.padding = LAYOUT.page_padding
     page.theme_mode = ft.ThemeMode.DARK
 
     page.theme = ft.Theme(
@@ -58,8 +58,7 @@ def main(page: ft.Page):
         role = store.get("role") or "host"
         target = f"/{role}/lobby"
 
-    asyncio.create_task(page.push_route(target))
-
+    push_route(page, target)
 
 if __name__ == "__main__":
     ft.run(main, view=ft.AppView.WEB_BROWSER, port=8550)

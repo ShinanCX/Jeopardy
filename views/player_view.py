@@ -1,10 +1,11 @@
 import math
 import flet as ft
 from app_state import AppState
+from ui.layout import LAYOUT
 from views.components.player_card import PlayerCard
 
 
-def player_view(page: ft.Page, state: AppState, *, can_select_turn: bool = True) -> ft.Container:
+def player_view(page: ft.Page, state: AppState, broadcast_state, *, can_select_turn: bool = True) -> ft.Container:
     state.ensure_players()
 
     MIN_PLAYER_W = 220
@@ -35,6 +36,7 @@ def player_view(page: ft.Page, state: AppState, *, can_select_turn: bool = True)
                 state.set_turn(i)
                 recompute()
                 page.update()  # nur optisch; Screen bleibt gleich
+                broadcast_state()
 
             c = PlayerCard(
                 name=p.name,
@@ -53,10 +55,7 @@ def player_view(page: ft.Page, state: AppState, *, can_select_turn: bool = True)
         n = max(1, len(state.players))
 
         usable = page.width or 1200
-        try:
-            pad = page.padding or 0
-        except RuntimeError:
-            pad = 0
+        pad = LAYOUT.page_padding
         usable -= 2 * pad
         usable -= 2 * 8  # host.padding
         usable -= 2 * 1 # host.border

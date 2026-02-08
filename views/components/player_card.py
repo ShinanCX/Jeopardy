@@ -1,6 +1,8 @@
 import flet as ft
 from typing import Callable, Optional
 
+from ui.layout import LAYOUT
+
 
 class PlayerCard(ft.Container):
     def __init__(
@@ -18,7 +20,7 @@ class PlayerCard(ft.Container):
 
         self.border = ft.Border.all(2 if is_active else 1, color="primary" if is_active else "outline")
         self.border_radius = 16
-        self.padding = 12
+        self.padding = LAYOUT.card_padding
         self.expand = 1
         self.bgcolor = "surface_container"
 

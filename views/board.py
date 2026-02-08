@@ -44,7 +44,7 @@ def board_view(page: ft.Page, state: AppState, rerender, broadcast_state, caps: 
         on_pick_tile=on_pick_tile,
         can_pick_tile=caps.can_pick_tile,
     )
-    player_host = player_view(page, state, can_select_turn=caps.can_select_turn)
+    player_host = player_view(page, state, broadcast_state, can_select_turn=caps.can_select_turn)
 
     def recompute_all():
         # Board recompute
