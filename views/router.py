@@ -245,7 +245,8 @@ def setup_router(page: ft.Page, state: AppState):
                 )
                 page.update()
 
-            page.run_task(_refresh_lobby)
+            if page.session and page.session.connection:
+                page.run_task(_refresh_lobby)
             return
 
         if msg_type != "lobby_state":
@@ -277,9 +278,11 @@ def setup_router(page: ft.Page, state: AppState):
             )
             page.update()
 
-        page.run_task(_apply_and_refresh)
+        if page.session and page.session.connection:
+            page.run_task(_apply_and_refresh)
 
     page.pubsub.subscribe(_on_pubsub)
+
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 

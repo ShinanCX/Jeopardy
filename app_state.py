@@ -54,13 +54,20 @@ class AppState:
         """Entfernt einen Spieler anhand seiner player_id."""
         self.players = [p for p in self.players if p.player_id != player_id]
 
-    def add_player(self, player_id: str, name: str):
-        """Fügt einen Spieler hinzu oder aktualisiert seinen Namen (anhand player_id)."""
+    def add_player(self, player_id: str, name: str) -> bool:
+        """Fügt einen Spieler hinzu oder reconnectet ihn (anhand player_id oder Name).
+        Gibt True zurück wenn es ein Reconnect war."""
         for p in self.players:
             if p.player_id == player_id:
                 p.name = name
-                return
+                return False
+        # Reconnect: gleicher Name, alter Slot → player_id aktualisieren
+        for p in self.players:
+            if p.name == name and p.player_id != player_id:
+                p.player_id = player_id
+                return True
         self.players.append(Player(name=name, player_id=player_id))
+        return False
 
     def ensure_players(self):
         if not self.players:

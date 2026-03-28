@@ -12,12 +12,21 @@ def lobby_view(page: ft.Page, state: AppState, rerender, *, broadcast_state=None
     def on_new_game(_):
         if not is_host:
             return
-
         state.board = build_dummy_board(cols=6, rows=5)
         state.ensure_players()
+        for p in state.players:
+            p.score = 0
+        state.set_turn(0)
         state.screen = "board"
         rerender()
+        if broadcast_state:
+            broadcast_state()
 
+    def on_resume_game(_):
+        if not is_host:
+            return
+        state.screen = "board"
+        rerender()
         if broadcast_state:
             broadcast_state()
 
@@ -93,6 +102,7 @@ def lobby_view(page: ft.Page, state: AppState, rerender, *, broadcast_state=None
             ft.Container(height=8),
             player_list,
             ft.Container(height=24),
+            ft.FilledButton("Spiel fortsetzen", on_click=on_resume_game, visible=is_host and state.board is not None),
             ft.FilledButton("Spiel starten", on_click=on_new_game, visible=is_host),
             ft.Text("Warte auf den Host…", visible=not is_host),
         ],

@@ -43,10 +43,10 @@ def board_grid_view(
                     height=CELL_H,
                     alignment=ft.Alignment.CENTER,
                     padding=10,
-                    border=ft.Border.all(1, color="outline"),
-                    bgcolor="surface_container",
+                    border=ft.Border.all(1, color="outline_variant"),
+                    bgcolor="primary_container",
                     border_radius=10,
-                    content=ft.Text(cat.title, weight=ft.FontWeight.BOLD),
+                    content=ft.Text(cat.title, weight=ft.FontWeight.BOLD, color="on_primary_container"),
                 )
                 for cat in state.board.categories
             ],
@@ -56,23 +56,35 @@ def board_grid_view(
         def tile_cell(cat_i: int, tile_i: int) -> ft.Control:
             tile = state.board.categories[cat_i].tiles[tile_i]
 
-            def _pick(_):
-                if tile.used or (not can_pick_tile) or on_pick_tile is None:
-                    return
-                on_pick_tile(cat_i, tile_i)
+            if can_pick_tile:
+                def _pick(_):
+                    if tile.used or on_pick_tile is None:
+                        return
+                    on_pick_tile(cat_i, tile_i)
 
+                return ft.Container(
+                    width=col_w,
+                    height=CELL_H,
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Button(
+                        content=str(tile.value),
+                        on_click=_pick,
+                        disabled=tile.used,
+                        style=tile_btn_style,
+                        width=col_w,
+                        height=CELL_H,
+                    ),
+                )
+
+            # Spieler-Ansicht: kein Button, kein Cursor, kein Klick-Feedback
             return ft.Container(
                 width=col_w,
                 height=CELL_H,
                 alignment=ft.Alignment.CENTER,
-                content=ft.Button(
-                    content=str(tile.value),
-                    on_click=_pick if can_pick_tile else None,
-                    disabled=tile.used or (not can_pick_tile),
-                    style=tile_btn_style,
-                    width=col_w,
-                    height=CELL_H,
-                ),
+                border_radius=10,
+                bgcolor="surface_container",
+                border=ft.Border.all(1, color="outline"),
+                content=ft.Text("" if tile.used else str(tile.value)),
             )
 
         grid_rows = [header]
