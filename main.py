@@ -37,27 +37,15 @@ def main(page: ft.Page):
 
     # --- session.store defaults ---
     store = page.session.store
-    if store.get("role") is None:
-        store.set("role", "host")
-
     if store.get("player_id") is None:
         store.set("player_id", str(uuid.uuid4()))
-
-    # WICHTIG: lobby_id NICHT randomisieren, sonst sind Host/Player nie in derselben Lobby.
-    # Für Dev-Test fix:
-    if store.get("lobby_id") is None:
-        store.set("lobby_id", "dev")
 
     # Router
     setup_router(page, state)
 
-    # WICHTIG: route_change muss initial getriggert werden, egal ob route schon gesetzt ist.
-    # Wenn jemand direkt /player/lobby öffnet, ist page.route != "/" und sonst bleibt views leer.
-    target = page.route if page.route else "/"
-    if target == "/":
-        role = store.get("role") or "host"
-        target = f"/{role}/lobby"
-
+    # Beim direkten Aufruf einer spezifischen Route (z.B. /player/lobby) diese verwenden,
+    # sonst ins Menü.
+    target = page.route if (page.route and page.route != "/") else "/menu"
     push_route(page, target)
 
 if __name__ == "__main__":

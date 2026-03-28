@@ -1,4 +1,6 @@
 import flet as ft
+from flet.controls.core import view
+
 from app_state import AppState
 from ui.layout import LAYOUT
 
@@ -101,9 +103,8 @@ def board_grid_view(
         ),
     )
 
-    def recompute():
-        usable = (page.width or 1200)
-        pad = LAYOUT.page_padding
+    def recompute(viewport_w: int, pad: int):
+        usable = viewport_w
         usable -= 2 * pad
         usable -= 2 * 8  # host.padding
 
@@ -111,7 +112,7 @@ def board_grid_view(
         board_content.controls = [build_board_grid(col_w)]
 
     # Initial befüllen (kein update() auf board_content!)
-    recompute()
+    recompute(page.width or 1200, LAYOUT.page_padding)
 
     host.data = {"recompute": recompute}
     return host

@@ -6,6 +6,9 @@ from app_state import AppState, compute_capabilities
 from lobby_store import get_lobby, update_lobby
 from ui.layout import LAYOUT
 
+from views.menu import menu_view
+from views.host_setup import host_setup_view
+from views.join import join_view
 from views.lobby import lobby_view
 from views.board import board_view
 from views.question import question_view
@@ -30,9 +33,7 @@ def _ensure_defaults(page: ft.Page):
         s.set("role", "host")
     if s.get("player_id") is None:
         s.set("player_id", str(uuid.uuid4()))
-    if s.get("lobby_id") is None:
-        # DEV: Host & Player müssen dieselbe Lobby teilen, sonst kein Sync
-        s.set("lobby_id", "dev")
+    # lobby_id wird erst beim Menü-Eintrag gesetzt
 
 
 def _get_role(page: ft.Page) -> str:
@@ -96,13 +97,99 @@ def setup_router(page: ft.Page, state: AppState):
 
         return ft.Text(f"Unbekannter Screen: {state.screen}")
 
+    def _build_menu_control() -> ft.Control:
+        def on_host():
+            push_route(page, "/host-setup")
+
+        def on_join():
+            push_route(page, "/join")
+
+        def on_create():
+            pass  # TODO: Create-Flow
+
+        return menu_view(on_host=on_host, on_join=on_join, on_create=on_create)
+
+    def _build_host_setup_control() -> ft.Control:
+        def on_create(settings: dict):
+            s = _store(page)
+            s.set("role", "host")
+            s.set("lobby_id", str(uuid.uuid4())[:8].upper())
+            state.players.clear()
+            state.board = None
+            state.screen = "lobby"
+            state.max_players = settings.get("max_players", 4)
+            push_route(page, "/host/lobby")
+
+        def on_back():
+            push_route(page, "/menu")
+
+        return host_setup_view(on_create=on_create, on_back=on_back)
+
+    def _build_join_control() -> ft.Control:
+        def on_join(code: str, name: str):
+            s = _store(page)
+            s.set("role", "player")
+            s.set("lobby_id", code)
+            s.set("player_name", name)
+
+            # Aktuellen Lobby-State laden, damit Player sofort synced ist
+            try:
+                lobby = get_lobby(code)
+                if lobby.data:
+                    state.apply_snapshot(lobby.data)
+            except Exception:
+                pass
+
+            # Host über Beitritt informieren
+            msg = json.dumps({
+                "type": "player_join",
+                "lobby_id": code,
+                "player_id": s.get("player_id"),
+                "name": name,
+            })
+            page.pubsub.send_all(msg)
+
+            push_route(page, "/player/lobby")
+
+        def on_back():
+            push_route(page, "/menu")
+
+        return join_view(on_join=on_join, on_back=on_back)
+
     def route_change(_):
         route = page.route or "/"
+
         if route == "/":
-            push_route(page, _route_for_screen(page, "lobby"))
+            push_route(page, "/menu")
             return
 
         parts = [p for p in route.split("/") if p]
+
+        # Flat routes ohne Rollen-Präfix
+        if len(parts) == 1 and parts[0] == "menu":
+            page.views.clear()
+            page.views.append(
+                ft.View(route=route, controls=[_build_menu_control()], padding=LAYOUT.page_padding)
+            )
+            page.update()
+            return
+
+        if len(parts) == 1 and parts[0] == "host-setup":
+            page.views.clear()
+            page.views.append(
+                ft.View(route=route, controls=[_build_host_setup_control()], padding=LAYOUT.page_padding)
+            )
+            page.update()
+            return
+
+        if len(parts) == 1 and parts[0] == "join":
+            page.views.clear()
+            page.views.append(
+                ft.View(route=route, controls=[_build_join_control()], padding=LAYOUT.page_padding)
+            )
+            page.update()
+            return
+
         role = parts[0].lower() if len(parts) >= 1 else _get_role(page)
         tail = parts[1].lower() if len(parts) >= 2 else "lobby"
 
@@ -138,10 +225,30 @@ def setup_router(page: ft.Page, state: AppState):
         except Exception:
             return
 
-        if msg.get("type") != "lobby_state":
+        msg_type = msg.get("type")
+        my_lobby = _get_lobby_id(page)
+
+        if msg.get("lobby_id") != my_lobby:
             return
 
-        if msg.get("lobby_id") != _get_lobby_id(page):
+        if msg_type in ("player_join", "player_leave") and _get_role(page) == "host":
+            if msg_type == "player_join":
+                state.add_player(msg.get("player_id", ""), msg.get("name", "Spieler"))
+            else:
+                state.remove_player(msg.get("player_id", ""))
+            broadcast_state()
+
+            async def _refresh_lobby():
+                page.views.clear()
+                page.views.append(
+                    ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
+                )
+                page.update()
+
+            page.run_task(_refresh_lobby)
+            return
+
+        if msg_type != "lobby_state":
             return
 
         if _get_role(page) == "host":
@@ -151,6 +258,11 @@ def setup_router(page: ft.Page, state: AppState):
         state.apply_snapshot(data)
 
         async def _apply_and_refresh():
+            # Host hat die Lobby geschlossen → Player ins Menü
+            if state.screen == "menu":
+                await page.push_route("/menu")
+                return
+
             target = _route_for_screen(page, state.screen)
 
             # Wenn Screen/Route gewechselt hat: normal navigieren (triggert route_change -> rebuild)
@@ -171,11 +283,13 @@ def setup_router(page: ft.Page, state: AppState):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    # Optional: beim Join direkt aktuellen Lobby-State ziehen
-    try:
-        lobby = get_lobby(_get_lobby_id(page))
-        if lobby.data:
-            state.apply_snapshot(lobby.data)
-            push_route(page, _route_for_screen(page, state.screen))
-    except Exception:
-        pass
+    # Beim Join direkt aktuellen Lobby-State ziehen (nur wenn lobby_id bereits gesetzt)
+    lobby_id = _get_lobby_id(page)
+    if lobby_id:
+        try:
+            lobby = get_lobby(lobby_id)
+            if lobby.data:
+                state.apply_snapshot(lobby.data)
+                push_route(page, _route_for_screen(page, state.screen))
+        except Exception:
+            pass

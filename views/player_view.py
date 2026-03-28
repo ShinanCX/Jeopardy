@@ -34,7 +34,7 @@ def player_view(page: ft.Page, state: AppState, broadcast_state, *, can_select_t
                 if not can_select_turn:
                     return
                 state.set_turn(i)
-                recompute()
+                recompute(page.width or 1200, LAYOUT.page_padding)
                 page.update()  # nur optisch; Screen bleibt gleich
                 broadcast_state()
 
@@ -50,12 +50,11 @@ def player_view(page: ft.Page, state: AppState, broadcast_state, *, can_select_t
 
         return ft.Row(controls=cards, spacing=PLAYER_GAP, expand=1)
 
-    def recompute():
+    def recompute(viewport_w: int, pad: int):
         state.ensure_players()
         n = max(1, len(state.players))
 
-        usable = page.width or 1200
-        pad = LAYOUT.page_padding
+        usable = viewport_w
         usable -= 2 * pad
         usable -= 2 * 8  # host.padding
         usable -= 2 * 1 # host.border
@@ -72,6 +71,6 @@ def player_view(page: ft.Page, state: AppState, broadcast_state, *, can_select_t
         card_w = max(MIN_PLAYER_W, card_w)
         players_content.controls = [build_players_row(card_w)]
 
-    recompute()
+    recompute(page.width or 1200, LAYOUT.page_padding)
     host.data = {"recompute": recompute}
     return host

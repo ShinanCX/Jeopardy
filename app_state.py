@@ -9,6 +9,7 @@ class Player:
     name: str
     score: int = 0
     is_turn: bool = False
+    player_id: str = ""
 
 class Capabilities:
     """UI/Action permissions derived from role + current game state."""
@@ -16,6 +17,7 @@ class Capabilities:
     can_select_turn: bool = False # aktiven Spieler wechseln
     can_award_points: bool = False # Richtig/Falsch, Punkte
     can_simulate_buzzer: bool = False # Buzzer-Sim Buttons / Answerer pick
+    can_go_to_lobby: bool = False # Zur-Lobby-Button sichtbar/nutzbar
 
 
 def compute_capabilities(state: "AppState", role: str) -> Capabilities:
@@ -26,6 +28,7 @@ def compute_capabilities(state: "AppState", role: str) -> Capabilities:
     if role == "host":
         caps.can_pick_tile = state.screen == "board"
         caps.can_select_turn = state.screen == "board"
+        caps.can_go_to_lobby = True
 
         caps.can_award_points = state.screen == "question"
         caps.can_simulate_buzzer = state.screen == "question"
@@ -46,6 +49,18 @@ class AppState:
     question_answer_revealed: bool = False
     buzzer_open: bool = False  # sind Buzzers offen?
     buzzed_queue: list[int] = field(default_factory=list)  # später live; jetzt vorbereitet
+
+    def remove_player(self, player_id: str):
+        """Entfernt einen Spieler anhand seiner player_id."""
+        self.players = [p for p in self.players if p.player_id != player_id]
+
+    def add_player(self, player_id: str, name: str):
+        """Fügt einen Spieler hinzu oder aktualisiert seinen Namen (anhand player_id)."""
+        for p in self.players:
+            if p.player_id == player_id:
+                p.name = name
+                return
+        self.players.append(Player(name=name, player_id=player_id))
 
     def ensure_players(self):
         if not self.players:
@@ -170,7 +185,7 @@ class AppState:
 
     @staticmethod
     def _players_to_list(players: List[Player]) -> list[dict]:
-        return [{"name": p.name, "score": p.score, "is_turn": p.is_turn} for p in players]
+        return [{"name": p.name, "score": p.score, "is_turn": p.is_turn, "player_id": p.player_id} for p in players]
 
     @staticmethod
     def _players_from_list(data: Optional[list]) -> List[Player]:
@@ -183,6 +198,7 @@ class AppState:
                     name=str(p.get("name", "")),
                     score=int(p.get("score", 0)),
                     is_turn=bool(p.get("is_turn", False)),
+                    player_id=str(p.get("player_id", "")),
                 )
             )
         return out
@@ -228,8 +244,9 @@ class AppState:
                 self.active_player_index = int(snap["active_player_index"])
             except Exception:
                 self.active_player_index = 0
-            # is_turn flags konsistent setzen
-            self.ensure_players()
+            # is_turn flags konsistent setzen (ohne Dummy-Spieler zu erstellen)
+            if self.players:
+                self.set_turn(self.active_player_index)
 
         if "question_turn_owner_index" in snap and snap["question_turn_owner_index"] is not None:
             try:

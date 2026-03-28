@@ -4,6 +4,7 @@ import flet as ft
 def topbar_view(
     title: str,
     on_back=None,
+    back_label: str = "Zur Lobby",
     right_control: ft.Control | None = None,
 ) -> ft.Control:
     """
@@ -14,7 +15,7 @@ def topbar_view(
     """
 
     left = (
-        ft.OutlinedButton("Zur Lobby", on_click=on_back)
+        ft.OutlinedButton(back_label, on_click=on_back)
         if on_back
         else ft.Container(width=120)
     )

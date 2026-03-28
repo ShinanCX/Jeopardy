@@ -1,6 +1,7 @@
 import flet as ft
 
 from app_state import AppState, Capabilities, compute_capabilities
+from ui.layout import LAYOUT
 
 from views.player_view import player_view
 from views.board_grid import board_grid_view
@@ -22,11 +23,12 @@ def board_view(page: ft.Page, state: AppState, rerender, broadcast_state, caps: 
 
     def go_lobby(_):
         state.screen = "lobby"
+        broadcast_state()
         rerender()
 
     topbar = topbar_view(
         title="Testboard",
-        on_back=go_lobby,
+        on_back=go_lobby if caps.can_go_to_lobby else None,
     )
 
     def on_pick_tile(cat_i: int, tile_i: int):
@@ -47,17 +49,21 @@ def board_view(page: ft.Page, state: AppState, rerender, broadcast_state, caps: 
     player_host = player_view(page, state, broadcast_state, can_select_turn=caps.can_select_turn)
 
     def recompute_all():
+        # Parameters
+        viewport_w = page.width or 1200
+        pad = LAYOUT.page_padding
+
         # Board recompute
         bd = getattr(board_host, "data", None) or {}
         fn = bd.get("recompute")
         if callable(fn):
-            fn()
+            fn(viewport_w, pad)
 
         # Player recompute
         pd = getattr(player_host, "data", None) or {}
         fn = pd.get("recompute")
         if callable(fn):
-            fn()
+            fn(viewport_w, pad)
 
     def on_resize(_):
         recompute_all()
