@@ -1,5 +1,6 @@
 import flet as ft
 from typing import Callable
+from board_loader import list_boards
 from views.topbar import topbar_view
 
 MIN_PLAYERS = 2
@@ -10,9 +11,12 @@ def host_setup_view(
     on_create: Callable[[dict], None],
     on_back: Callable,
 ) -> ft.Control:
-    max_players_val = [4]  # mutable container
+    max_players_val = [4]
 
     count_label = ft.Text(str(max_players_val[0]), size=24, weight=ft.FontWeight.BOLD, width=40, text_align=ft.TextAlign.CENTER)
+    error_text = ft.Text("", color="error", visible=False)
+
+    boards = list_boards()  # [(board_id, title), ...]
 
     def update_count(delta: int):
         new_val = max_players_val[0] + delta
@@ -23,7 +27,15 @@ def host_setup_view(
         count_label.update()
 
     def on_submit(_):
-        on_create({"max_players": max_players_val[0]})
+        board_id = board_control.value if isinstance(board_control, ft.Dropdown) else None
+        if not board_id:
+            error_text.value = "Bitte ein Board auswählen."
+            error_text.visible = True
+            error_text.update()
+            return
+        error_text.visible = False
+        error_text.update()
+        on_create({"max_players": max_players_val[0], "board_id": board_id})
 
     topbar = topbar_view(
         title="Lobby erstellen",
@@ -31,12 +43,31 @@ def host_setup_view(
         back_label="Zum Menü",
     )
 
+    if boards:
+        board_control = ft.Dropdown(
+            label="Board auswählen",
+            width=280,
+            options=[ft.dropdown.Option(key=bid, text=title) for bid, title in boards],
+        )
+    else:
+        board_control = ft.Text(
+            "Keine Boards gefunden. Lege ein Board unter boards/<name>/board.json an.",
+            color="error",
+            italic=True,
+        )
+
     return ft.Column(
         controls=[
             topbar,
             ft.Container(height=40),
             ft.Column(
                 controls=[
+                    ft.Text("Board", size=15),
+                    ft.Container(height=8),
+                    board_control,
+                    ft.Container(height=8),
+                    error_text,
+                    ft.Container(height=24),
                     ft.Text("Maximale Spieleranzahl", size=15),
                     ft.Container(height=8),
                     ft.Row(

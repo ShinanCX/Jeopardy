@@ -6,6 +6,8 @@ from typing import List
 class Question:
     prompt: str
     answer: str
+    type: str = "text"
+    asset: str | None = None
 
 
 @dataclass

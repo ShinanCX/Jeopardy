@@ -1,6 +1,6 @@
 import flet as ft
 from app_state import AppState
-from models.models import build_dummy_board
+from board_loader import load_board
 from views.topbar import topbar_view
 
 
@@ -12,7 +12,8 @@ def lobby_view(page: ft.Page, state: AppState, rerender, *, broadcast_state=None
     def on_new_game(_):
         if not is_host:
             return
-        state.board = build_dummy_board(cols=6, rows=5)
+        board_id = page.session.store.get("board_id") or ""
+        state.board = load_board(board_id)
         state.ensure_players()
         for p in state.players:
             p.score = 0

@@ -1,0 +1,275 @@
+{
+  "title": "Allgemeinwissen",
+  "categories": [
+    {
+      "title": "Geographie",
+      "tiles": [
+        {
+          "value": 100,
+          "question": {
+            "type": "text",
+            "prompt": "Hauptstadt von Frankreich?",
+            "answer": "Paris"
+          }
+        },
+        {
+          "value": 200,
+          "question": {
+            "type": "text",
+            "prompt": "Welcher Fluss fließt durch Wien?",
+            "answer": "Donau"
+          }
+        },
+        {
+          "value": 300,
+          "question": {
+            "type": "text",
+            "prompt": "Wie heißt der höchste Berg Afrikas?",
+            "answer": "Kilimandscharo"
+          }
+        },
+        {
+          "value": 400,
+          "question": {
+            "type": "text",
+            "prompt": "In welchem Land liegt Machu Picchu?",
+            "answer": "Peru"
+          }
+        },
+        {
+          "value": 500,
+          "question": {
+            "type": "text",
+            "prompt": "Welches Land hat die längste Küstenlinie der Welt?",
+            "answer": "Kanada"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Geschichte",
+      "tiles": [
+        {
+          "value": 100,
+          "question": {
+            "type": "text",
+            "prompt": "In welchem Jahr fiel die Berliner Mauer?",
+            "answer": "1989"
+          }
+        },
+        {
+          "value": 200,
+          "question": {
+            "type": "text",
+            "prompt": "Wer war der erste Mensch auf dem Mond?",
+            "answer": "Neil Armstrong"
+          }
+        },
+        {
+          "value": 300,
+          "question": {
+            "type": "text",
+            "prompt": "Welches Schiff sank 1912 nach einer Kollision mit einem Eisberg?",
+            "answer": "Titanic"
+          }
+        },
+        {
+          "value": 400,
+          "question": {
+            "type": "text",
+            "prompt": "In welchem Jahr begann der Erste Weltkrieg?",
+            "answer": "1914"
+          }
+        },
+        {
+          "value": 500,
+          "question": {
+            "type": "text",
+            "prompt": "Wer entschlüsselte den Enigma-Code im Zweiten Weltkrieg maßgeblich?",
+            "answer": "Alan Turing"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Wissenschaft",
+      "tiles": [
+        {
+          "value": 100,
+          "question": {
+            "type": "text",
+            "prompt": "Chemisches Symbol für Gold?",
+            "answer": "Au"
+          }
+        },
+        {
+          "value": 200,
+          "question": {
+            "type": "text",
+            "prompt": "Wie viele Planeten hat unser Sonnensystem?",
+            "answer": "8"
+          }
+        },
+        {
+          "value": 300,
+          "question": {
+            "type": "text",
+            "prompt": "Was ist die Lichtgeschwindigkeit in km/s (gerundet)?",
+            "answer": "300.000 km/s"
+          }
+        },
+        {
+          "value": 400,
+          "question": {
+            "type": "text",
+            "prompt": "Wie lautet die chemische Formel für Wasser?",
+            "answer": "H₂O"
+          }
+        },
+        {
+          "value": 500,
+          "question": {
+            "type": "text",
+            "prompt": "Welches Organ produziert Insulin?",
+            "answer": "Bauchspeicheldrüse"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Kultur & Kunst",
+      "tiles": [
+        {
+          "value": 100,
+          "question": {
+            "type": "text",
+            "prompt": "Wer malte die Mona Lisa?",
+            "answer": "Leonardo da Vinci"
+          }
+        },
+        {
+          "value": 200,
+          "question": {
+            "type": "text",
+            "prompt": "Von wem stammt die Sinfonie Nr. 9 in d-Moll?",
+            "answer": "Ludwig van Beethoven"
+          }
+        },
+        {
+          "value": 300,
+          "question": {
+            "type": "text",
+            "prompt": "Wie heißt der Zauberschüler in J.K. Rowlings Romanen?",
+            "answer": "Harry Potter"
+          }
+        },
+        {
+          "value": 400,
+          "question": {
+            "type": "text",
+            "prompt": "In welcher Stadt steht das Kolosseum?",
+            "answer": "Rom"
+          }
+        },
+        {
+          "value": 500,
+          "question": {
+            "type": "text",
+            "prompt": "Welcher Schriftsteller schrieb 'Faust'?",
+            "answer": "Johann Wolfgang von Goethe"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Sport",
+      "tiles": [
+        {
+          "value": 100,
+          "question": {
+            "type": "text",
+            "prompt": "Wie viele Spieler hat eine Fußballmannschaft auf dem Feld?",
+            "answer": "11"
+          }
+        },
+        {
+          "value": 200,
+          "question": {
+            "type": "text",
+            "prompt": "In welchem Land fanden die Olympischen Sommerspiele 2024 statt?",
+            "answer": "Frankreich"
+          }
+        },
+        {
+          "value": 300,
+          "question": {
+            "type": "text",
+            "prompt": "Wie nennt man einen Treffer über Par im Golf?",
+            "answer": "Birdie"
+          }
+        },
+        {
+          "value": 400,
+          "question": {
+            "type": "text",
+            "prompt": "Über welche Distanz wird der klassische Marathon gelaufen?",
+            "answer": "42,195 km"
+          }
+        },
+        {
+          "value": 500,
+          "question": {
+            "type": "text",
+            "prompt": "Wie viele Grand-Slam-Titel gewann Roger Federer?",
+            "answer": "20"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Technik",
+      "tiles": [
+        {
+          "value": 100,
+          "question": {
+            "type": "text",
+            "prompt": "Was bedeutet die Abkürzung 'CPU'?",
+            "answer": "Central Processing Unit"
+          }
+        },
+        {
+          "value": 200,
+          "question": {
+            "type": "text",
+            "prompt": "In welchem Jahr wurde das World Wide Web erfunden?",
+            "answer": "1989"
+          }
+        },
+        {
+          "value": 300,
+          "question": {
+            "type": "text",
+            "prompt": "Wie viel Byte hat ein Kilobyte (binär)?",
+            "answer": "1024"
+          }
+        },
+        {
+          "value": 400,
+          "question": {
+            "type": "text",
+            "prompt": "Welche Programmiersprache wurde von Guido van Rossum entwickelt?",
+            "answer": "Python"
+          }
+        },
+        {
+          "value": 500,
+          "question": {
+            "type": "text",
+            "prompt": "Was steht hinter dem Begriff 'Moore's Law'?",
+            "answer": "Die Transistoranzahl auf Chips verdoppelt sich etwa alle zwei Jahre"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -155,8 +155,10 @@ class AppState:
                             "value": t.value,
                             "used": t.used,
                             "question": {
+                                "type": t.question.type,
                                 "prompt": t.question.prompt,
                                 "answer": t.question.answer,
+                                "asset": t.question.asset,
                             },
                         }
                         for t in c.tiles
@@ -182,8 +184,10 @@ class AppState:
                         value=int(t.get("value", 0)),
                         used=bool(t.get("used", False)),
                         question=Question(
+                            type=str(q.get("type", "text")),
                             prompt=str(q.get("prompt", "")),
                             answer=str(q.get("answer", "")),
+                            asset=q.get("asset"),
                         ),
                     )
                 )

@@ -114,6 +114,7 @@ def setup_router(page: ft.Page, state: AppState):
             s = _store(page)
             s.set("role", "host")
             s.set("lobby_id", str(uuid.uuid4())[:8].upper())
+            s.set("board_id", settings.get("board_id", ""))
             state.players.clear()
             state.board = None
             state.screen = "lobby"
