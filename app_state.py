@@ -16,7 +16,6 @@ class Capabilities:
     can_pick_tile: bool = False  # Board tiles clickable (host only)
     can_select_turn: bool = False # aktiven Spieler wechseln
     can_award_points: bool = False # Richtig/Falsch, Punkte
-    can_simulate_buzzer: bool = False # Buzzer-Sim Buttons / Answerer pick
     can_go_to_lobby: bool = False # Zur-Lobby-Button sichtbar/nutzbar
 
 
@@ -31,7 +30,6 @@ def compute_capabilities(state: "AppState", role: str) -> Capabilities:
         caps.can_go_to_lobby = True
 
         caps.can_award_points = state.screen == "question"
-        caps.can_simulate_buzzer = state.screen == "question"
     return caps
 
 

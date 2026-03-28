@@ -50,54 +50,43 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
             wrong_btn.content = f"❌ Falsch ({a.name})"
 
     def refresh_buzzer_controls():
-        """Show/hide buzzer simulation controls depending on buzzer_open."""
-        if not caps.can_simulate_buzzer:
+        """Zeigt Buzz-Button für Spieler wenn Buzzers offen sind."""
+        role = (page.session.store.get("role") or "host").lower()
+        if role != "player":
             buzzer_holder.content = ft.Container()
             return
 
-        def pick_answerer(i: int):
-            if not state.buzzer_open and state.question_answerer_index is not None:
-                return
+        if not state.buzzer_open:
+            page.on_keyboard_event = None
+            buzzer_holder.content = ft.Container()
+            return
 
-            if state.buzzer_open:
-                if i not in state.buzzed_queue:
-                    state.buzzed_queue.append(i)
-                state.set_answerer(state.buzzed_queue[0])
-                state.buzzer_open = False
+        my_player_id = page.session.store.get("player_id") or ""
+        my_index = next((i for i, p in enumerate(state.players) if p.player_id == my_player_id), -1)
 
-            refresh_status()
-            refresh_buzzer_controls()
-            page.update()
-            broadcast_state()
+        if my_index == state.question_answerer_index:
+            page.on_keyboard_event = None
+            buzzer_holder.content = ft.Container()
+            return
+
+        def send_buzz(_=None):
+            import json as _json
+            lobby_id = page.session.store.get("lobby_id") or ""
+            player_id = page.session.store.get("player_id") or ""
+            msg = _json.dumps({"type": "player_buzz", "lobby_id": lobby_id, "player_id": player_id})
+            page.pubsub.send_all(msg)
+            page.on_keyboard_event = None
+
+        def on_key(e: ft.KeyboardEvent):
+            if e.key == " ":
+                send_buzz()
+
+        page.on_keyboard_event = on_key
 
         buzzer_holder.content = ft.Container(
-            padding=12,
-            border=ft.Border.all(1, color="outline"),
-            border_radius=12,
-            bgcolor="surface_container",
-            content=ft.Column(
-                controls=[
-                    ft.Text("Buzzer (Simulation)", weight=ft.FontWeight.BOLD),
-                    ft.Text(
-                        "Später ersetzen wir das durch echte Buzz-Events (WebSocket).",
-                        size=12,
-                        opacity=0.7,
-                    ),
-                    ft.Row(
-                        controls=[
-                            ft.OutlinedButton(
-                                content=f"{p.name} buzzert",
-                                on_click=lambda e, i=i: pick_answerer(i),
-                                disabled=(i == state.question_answerer_index),
-                            )
-                            for i, p in enumerate(state.players)
-                        ],
-                        wrap=True,
-                    ),
-                ],
-                tight=True,
-                spacing=8,
-            ),
+            padding=16,
+            alignment=ft.Alignment.CENTER,
+            content=ft.FilledButton("Buzz!  [Space]", on_click=send_buzz, width=200),
         )
 
     # --- actions ---
@@ -108,6 +97,7 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
         broadcast_state()
 
     def back_without_use(_):
+        page.on_keyboard_event = None
         state.selected = None
         state.end_question_round()
         state.screen = "board"
@@ -115,6 +105,7 @@ def question_view(page: ft.Page, state: AppState, rerender, broadcast_state, cap
         broadcast_state()
 
     def finish_round_and_back():
+        page.on_keyboard_event = None
         tile.used = True
         state.selected = None
         state.end_question_round()

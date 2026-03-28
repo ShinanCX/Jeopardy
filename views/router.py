@@ -1,4 +1,5 @@
 import json
+import threading
 import uuid
 import flet as ft
 
@@ -16,6 +17,7 @@ from views.question import question_view
 
 _SCREEN_TO_ROUTE = {"lobby": "lobby", "board": "game", "question": "question"}
 _ROUTE_TO_SCREEN = {"lobby": "lobby", "game": "board", "question": "question"}
+_buzz_lock = threading.Lock()
 
 def push_route(page: ft.Page, route: str):
     async def _do():
@@ -248,6 +250,29 @@ def setup_router(page: ft.Page, state: AppState):
 
             if page.session and page.session.connection:
                 page.run_task(_refresh_lobby)
+            return
+
+        if msg_type == "player_buzz" and _get_role(page) == "host":
+            with _buzz_lock:
+                if state.buzzer_open:
+                    player_id = msg.get("player_id", "")
+                    idx = next((i for i, p in enumerate(state.players) if p.player_id == player_id), -1)
+                    if idx >= 0 and idx not in state.buzzed_queue:
+                        state.buzzed_queue.append(idx)
+                    if state.buzzed_queue:
+                        state.set_answerer(state.buzzed_queue[0])
+                        state.buzzer_open = False
+                    broadcast_state()
+
+                async def _refresh_question():
+                    page.views.clear()
+                    page.views.append(
+                        ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
+                    )
+                    page.update()
+
+                if page.session and page.session.connection:
+                    page.run_task(_refresh_question)
             return
 
         if msg_type != "lobby_state":
