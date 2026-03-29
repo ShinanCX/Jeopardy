@@ -65,10 +65,10 @@ def setup_router(page: ft.Page, state: AppState):
     _sound_files = {"buzz": "buzz.mp3", "correct_answer": "correct_answer.mp3", "wrong_answer": "wrong_answer.mp3"}
     _sounds = {}
     try:
-        from flet_audio import Audio as FletAudio
+        from flet_audio import Audio as FletAudio, ReleaseMode
         for name, filename in _sound_files.items():
             if (_assets_dir / filename).exists():
-                audio = FletAudio(src=filename, autoplay=False)
+                audio = FletAudio(src=filename, autoplay=False, release_mode=ReleaseMode.STOP)
                 page.services.append(audio)
                 _sounds[name] = audio
         if _sounds:
@@ -79,7 +79,7 @@ def setup_router(page: ft.Page, state: AppState):
     def play_sound(name: str):
         audio = _sounds.get(name)
         if audio:
-            page.run_task(audio.play, 0)
+            page.run_task(audio.play)
 
     def broadcast_sound(name: str):
         """Host sendet Sound-Event an alle Clients."""
