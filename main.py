@@ -49,4 +49,4 @@ def main(page: ft.Page):
     push_route(page, target)
 
 if __name__ == "__main__":
-    ft.run(main, view=None, port=8550, assets_dir="assets")
+    ft.run(main, view=ft.AppView.FLET_APP_HIDDEN, port=8550, assets_dir="assets")
