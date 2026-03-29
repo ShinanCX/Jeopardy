@@ -79,7 +79,18 @@ def setup_router(page: ft.Page, state: AppState):
     def play_sound(name: str):
         audio = _sounds.get(name)
         if audio:
-            page.run_task(audio.play)
+            page.run_task(audio.play, 0)
+
+    def broadcast_sound(name: str):
+        """Host sendet Sound-Event an alle Clients."""
+        lobby_id = _get_lobby_id(page)
+        if not lobby_id:
+            return
+        page.pubsub.send_all(json.dumps({
+            "type": "play_sound",
+            "lobby_id": lobby_id,
+            "name": name,
+        }))
 
     def broadcast_state():
         role = _get_role(page)
@@ -121,6 +132,7 @@ def setup_router(page: ft.Page, state: AppState):
                 caps=caps,
                 broadcast_state=broadcast_state,
                 play_sound=play_sound,
+                broadcast_sound=broadcast_sound,
             )
 
         return ft.Text(f"Unbekannter Screen: {state.screen}")
@@ -334,6 +346,10 @@ def setup_router(page: ft.Page, state: AppState):
         my_lobby = _get_lobby_id(page)
 
         if msg.get("lobby_id") != my_lobby:
+            return
+
+        if msg_type == "play_sound":
+            play_sound(msg.get("name", ""))
             return
 
         if msg_type in ("player_join", "player_leave") and _get_role(page) == "host":

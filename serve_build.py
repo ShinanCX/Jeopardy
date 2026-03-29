@@ -18,6 +18,7 @@ import websockets.asyncio.client as ws_client
 from aiohttp import web
 
 BUILD_DIR = Path(__file__).parent / "build" / "web"
+BOARDS_DIR = Path(__file__).parent / "boards"
 FLET_WS_URL = "ws://localhost:8550/ws"
 PORT = 8080
 
@@ -89,9 +90,21 @@ async def static_handler(request: web.Request) -> web.Response:
     return web.Response(body=file_path.read_bytes(), content_type=content_type, charset="utf-8" if content_type in ("text/html", "text/css", "application/javascript", "application/json") else None)
 
 
+async def boards_handler(request: web.Request) -> web.Response:
+    """Serviert Board-Assets (Bilder etc.) aus dem boards/-Verzeichnis."""
+    path = request.match_info.get("path", "")
+    file_path = BOARDS_DIR / path
+    if not file_path.exists() or file_path.is_dir():
+        raise web.HTTPNotFound()
+    suffix = file_path.suffix.lower()
+    content_type = MIME_OVERRIDES.get(suffix, "application/octet-stream")
+    return web.Response(body=file_path.read_bytes(), content_type=content_type)
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/ws", ws_proxy_handler)
+    app.router.add_get("/boards/{path:.*}", boards_handler)
     app.router.add_get("/{path:.*}", static_handler)
     return app
 

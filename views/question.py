@@ -16,6 +16,7 @@ def question_view(
     broadcast_state,
     caps: Capabilities | None = None,
     play_sound=None,
+    broadcast_sound=None,
 ) -> ft.Control:
     # Guard rails
     if state.board is None or state.selected is None:
@@ -37,6 +38,8 @@ def question_view(
     def _play(name: str):
         if play_sound:
             play_sound(name)
+        if broadcast_sound:
+            broadcast_sound(name)
 
     # -------------------------------------------------------------------------
     # Shared UI refs
@@ -218,17 +221,20 @@ def question_view(
             controls: list[ft.Control] = [prompt_text]
             if q.asset:
                 try:
-                    img_bytes = Path(q.asset).read_bytes()
+                    from board_loader import BOARDS_DIR
+                    asset_path = Path(q.asset)
+                    try:
+                        rel = asset_path.relative_to(BOARDS_DIR)
+                        src = f"/boards/{rel.as_posix()}"
+                    except ValueError:
+                        # Pfad ist nicht unter BOARDS_DIR — Bytes-Fallback
+                        src = asset_path.read_bytes()
                     controls.append(
-                        ft.Image(
-                            src=img_bytes,
-                            fit=ft.BoxFit.CONTAIN,
-                            height=300,
-                        )
+                        ft.Image(src=src, fit=ft.BoxFit.CONTAIN, height=300)
                     )
                 except Exception as _img_err:
                     print(f"[Image] Fehler beim Laden: {_img_err!r}  path={q.asset!r}")
-                    controls.append(ft.Text(f"Bild nicht gefunden: {q.asset}\n{_img_err}", color="error", italic=True))
+                    controls.append(ft.Text(f"Bild nicht gefunden: {q.asset}", color="error", italic=True))
             return ft.Column(controls=controls, tight=True, spacing=8)
 
         if q_type == "audio":
