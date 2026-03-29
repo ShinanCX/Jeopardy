@@ -1,0 +1,37 @@
+[project]
+name = "jeopardy"
+version = "1.0.0"
+description = "Jeopardy Quiz Game"
+requires-python = ">=3.12"
+dependencies = [
+    "flet==0.83.0",
+    "flet-audio==0.83.0",
+]
+
+[tool.flet]
+app_name = "Jeopardy"
+description = "Jeopardy Quiz Game"
+product_name = "Jeopardy"
+org = "de.jeopardy"
+
+[tool.flet.web]
+# flet build web erstellt einen Flutter-Web-Build mit flet_audio.
+# Danach in views/router.py play_sound aktivieren:
+#
+#   from flet_audio import Audio as FletAudio
+#
+#   _assets_dir = Path(__file__).parent.parent / "assets"
+#   _sound_files = {"buzz": "buzz.mp3", "correct_answer": "correct_answer.mp3", "wrong_answer": "wrong_answer.mp3"}
+#   _sounds = {}
+#   for name, filename in _sound_files.items():
+#       if (_assets_dir / filename).exists():
+#           audio = FletAudio(src=filename, autoplay=False)
+#           page.services.append(audio)
+#           _sounds[name] = audio
+#   if _sounds:
+#       page.update()
+#
+#   def play_sound(name: str):
+#       audio = _sounds.get(name)
+#       if audio:
+#           page.run_task(audio.play)
