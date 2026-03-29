@@ -1,5 +1,6 @@
 /.idea/
 /test.py
+/settings.local.json
 
 # Boards: nur beispiel-board tracken, alle anderen ignorieren
 /boards/*/
