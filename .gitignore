@@ -1,5 +1,6 @@
 /.idea/
 /test.py
+/build/
 /.claude/
 
 # Boards: nur beispiel-board tracken, alle anderen ignorieren

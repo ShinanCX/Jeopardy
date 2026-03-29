@@ -60,11 +60,26 @@ def _route_for_screen(page: ft.Page, screen: str) -> str:
 def setup_router(page: ft.Page, state: AppState):
     _ensure_defaults(page)
 
-    # Audio: aktuell deaktiviert (flet_audio läuft nicht im Flet-Dev-Web-Server).
-    # Für flet build web: flet_audio einkommentieren, page.services befüllen
-    # und play_sound auf audio.play() umstellen. Siehe pyproject.toml.
+    # Audio via flet_audio (funktioniert nur im flet build web, nicht im Dev-Server).
+    _assets_dir = Path(__file__).parent.parent / "assets"
+    _sound_files = {"buzz": "buzz.mp3", "correct_answer": "correct_answer.mp3", "wrong_answer": "wrong_answer.mp3"}
+    _sounds = {}
+    try:
+        from flet_audio import Audio as FletAudio
+        for name, filename in _sound_files.items():
+            if (_assets_dir / filename).exists():
+                audio = FletAudio(src=filename, autoplay=False)
+                page.services.append(audio)
+                _sounds[name] = audio
+        if _sounds:
+            page.update()
+    except Exception:
+        pass  # flet_audio nicht verfügbar (Dev-Modus)
+
     def play_sound(name: str):
-        pass
+        audio = _sounds.get(name)
+        if audio:
+            page.run_task(audio.play)
 
     def broadcast_state():
         role = _get_role(page)
