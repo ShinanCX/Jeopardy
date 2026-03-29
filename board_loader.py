@@ -55,4 +55,4 @@ def load_board(board_id: str) -> Board:
             title=str(cat_data.get("title", "")),
             tiles=tiles,
         ))
-    return Board(categories=categories)
+    return Board(categories=categories, title=data.get("title", ""))

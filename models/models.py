@@ -26,6 +26,7 @@ class Category:
 @dataclass
 class Board:
     categories: List[Category]
+    title: str = ""
 
 
 def build_dummy_board(cols: int = 6, rows: int = 5) -> Board:

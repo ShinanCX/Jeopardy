@@ -27,7 +27,7 @@ def board_view(page: ft.Page, state: AppState, rerender, broadcast_state, caps: 
         rerender()
 
     topbar = topbar_view(
-        title="Testboard",
+        title=state.board.title or "Board",
         on_back=go_lobby if caps.can_go_to_lobby else None,
     )
 

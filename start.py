@@ -6,6 +6,7 @@ Startet alle drei Dienste gleichzeitig:
 
 Beenden mit Strg+C.
 """
+import socket
 import subprocess
 import sys
 import threading
@@ -21,6 +22,18 @@ def stream_output(proc: subprocess.Popen, prefix: str, filter_fn=None):
         decoded = line.decode(errors="replace").rstrip()
         if filter_fn is None or filter_fn(decoded):
             print(f"[{prefix}] {decoded}")
+
+
+def wait_for_port(port: int, timeout: float = 30.0):
+    """Wartet bis ein Port erreichbar ist."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("localhost", port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.5)
+    return False
 
 
 def _tunnel_filter(line: str) -> bool:
@@ -40,10 +53,10 @@ def main():
         )
         procs.append(p_main)
         threading.Thread(target=stream_output, args=(p_main, "server"), daemon=True).start()
-        print("[start] Flet-Server gestartet (Port 8550)")
-
-        # Kurz warten damit der Server hochfährt bevor der Proxy startet
-        time.sleep(2)
+        if wait_for_port(8550):
+            print("[start] Flet-Server bereit auf http://localhost:8550")
+        else:
+            print("[start] Flet-Server antwortet nicht — weiter trotzdem...")
 
         p_serve = subprocess.Popen(
             [sys.executable, "serve_build.py"],
