@@ -7,8 +7,8 @@ from models.models import Board, Category, Tile, Question
 BOARDS_DIR = Path(os.environ.get("JEOPARDY_BOARDS_DIR", Path(__file__).parent / "boards"))
 
 
-def list_boards() -> list[tuple[str, str]]:
-    """Gibt eine sortierte Liste von (board_id, title) aller gültigen Boards zurück."""
+def list_boards() -> list[tuple[str, str, bool]]:
+    """Gibt eine sortierte Liste von (board_id, title, wip) aller gültigen Boards zurück."""
     result = []
     if not BOARDS_DIR.exists():
         return result
@@ -21,7 +21,8 @@ def list_boards() -> list[tuple[str, str]]:
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
             title = data.get("title", entry.name)
-            result.append((entry.name, title))
+            wip = bool(data.get("wip", False))
+            result.append((entry.name, title, wip))
         except Exception:
             pass
     return result

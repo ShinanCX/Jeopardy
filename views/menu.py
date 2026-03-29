@@ -17,7 +17,7 @@ def menu_view(
             ft.Container(height=12),
             ft.OutlinedButton("Lobby beitreten", on_click=lambda _: on_join(), width=240),
             ft.Container(height=12),
-            ft.OutlinedButton("Spiel erstellen", on_click=lambda _: on_create(), width=240),
+            ft.OutlinedButton("Board erstellen", on_click=lambda _: on_create(), width=240),
         ],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         tight=True,

@@ -1,13 +1,17 @@
 import json
 import threading
 import uuid
+from pathlib import Path
 import flet as ft
 
 from app_state import AppState, compute_capabilities
 from lobby_store import get_lobby, update_lobby
 from ui.layout import LAYOUT
 
+from board_loader import list_boards
 from views.menu import menu_view
+from views.board_editor import board_editor_view, board_setup_view
+from views.topbar import topbar_view
 from views.host_setup import host_setup_view
 from views.join import join_view
 from views.lobby import lobby_view
@@ -56,6 +60,12 @@ def _route_for_screen(page: ft.Page, screen: str) -> str:
 def setup_router(page: ft.Page, state: AppState):
     _ensure_defaults(page)
 
+    # Audio: aktuell deaktiviert (flet_audio läuft nicht im Flet-Dev-Web-Server).
+    # Für flet build web: flet_audio einkommentieren, page.services befüllen
+    # und play_sound auf audio.play() umstellen. Siehe pyproject.toml.
+    def play_sound(name: str):
+        pass
+
     def broadcast_state():
         role = _get_role(page)
         if role != "host":
@@ -95,6 +105,7 @@ def setup_router(page: ft.Page, state: AppState):
                 page, state, rerender,
                 caps=caps,
                 broadcast_state=broadcast_state,
+                play_sound=play_sound,
             )
 
         return ft.Text(f"Unbekannter Screen: {state.screen}")
@@ -107,7 +118,7 @@ def setup_router(page: ft.Page, state: AppState):
             push_route(page, "/join")
 
         def on_create():
-            pass  # TODO: Create-Flow
+            push_route(page, "/create")
 
         return menu_view(on_host=on_host, on_join=on_join, on_create=on_create)
 
@@ -159,6 +170,51 @@ def setup_router(page: ft.Page, state: AppState):
 
         return join_view(on_join=on_join, on_back=on_back)
 
+    def _build_board_overview() -> ft.Control:
+        boards = list_boards()  # [(board_id, title, wip), ...]
+
+        def _edit_row(board_id: str, title: str, wip: bool) -> ft.Control:
+            badge = ft.Container(
+                padding=ft.Padding(left=6, right=6, top=2, bottom=2),
+                border_radius=4,
+                bgcolor="error_container",
+                content=ft.Text("WIP", size=11, color="on_error_container"),
+                visible=wip,
+            )
+            return ft.Row(
+                controls=[
+                    ft.Text(title, expand=True, size=16,
+                            opacity=0.5 if wip else 1.0, italic=wip),
+                    badge,
+                    ft.OutlinedButton(
+                        "Bearbeiten",
+                        on_click=lambda _, bid=board_id: push_route(page, f"/create?board={bid}"),
+                    ),
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+
+        board_rows = [_edit_row(bid, title, wip) for bid, title, wip in boards] if boards else [
+            ft.Text("Noch keine Boards vorhanden.", italic=True, opacity=0.6)
+        ]
+
+        return ft.Column(
+            controls=[
+                topbar_view(title="Boards", on_back=lambda: push_route(page, "/menu"), back_label="Zum Menü"),
+                ft.Container(height=24),
+                ft.Text("Vorhandene Boards", size=15, weight=ft.FontWeight.BOLD),
+                ft.Container(height=8),
+                ft.Column(controls=board_rows, spacing=8, tight=True),
+                ft.Container(height=24),
+                ft.FilledButton(
+                    "Neues Board erstellen",
+                    on_click=lambda _: push_route(page, "/create?new=1"),
+                    width=240,
+                ),
+            ],
+            tight=True,
+        )
+
     def route_change(_):
         route = page.route or "/"
 
@@ -166,7 +222,9 @@ def setup_router(page: ft.Page, state: AppState):
             push_route(page, "/menu")
             return
 
-        parts = [p for p in route.split("/") if p]
+        # Query-String vom Pfad trennen, bevor wir splitten
+        path = route.split("?")[0]
+        parts = [p for p in path.split("/") if p]
 
         # Flat routes ohne Rollen-Präfix
         if len(parts) == 1 and parts[0] == "menu":
@@ -181,6 +239,35 @@ def setup_router(page: ft.Page, state: AppState):
             page.views.clear()
             page.views.append(
                 ft.View(route=route, controls=[_build_host_setup_control()], padding=LAYOUT.page_padding)
+            )
+            page.update()
+            return
+
+        if len(parts) == 1 and parts[0] == "create":
+            qd = page.query.to_dict if page.query else {}
+            board_id = qd.get("board") or ""
+            is_new = bool(qd.get("new"))
+            if board_id:
+                # Schritt 2: bestehendes Board bearbeiten
+                ctrl = board_editor_view(page, board_id=board_id, on_back=lambda: push_route(page, "/create"))
+            elif is_new:
+                # Schritt 1: neues Board anlegen
+                ctrl = board_setup_view(
+                    page,
+                    on_back=lambda: push_route(page, "/create"),
+                    on_created=lambda bid: push_route(page, f"/create?board={bid}"),
+                )
+            else:
+                # Übersichtsseite
+                ctrl = _build_board_overview()
+            page.views.clear()
+            page.views.append(
+                ft.View(
+                    route=route,
+                    controls=[ctrl],
+                    padding=LAYOUT.page_padding,
+                    scroll=ft.ScrollMode.AUTO,
+                )
             )
             page.update()
             return
@@ -265,6 +352,7 @@ def setup_router(page: ft.Page, state: AppState):
                     broadcast_state()
 
                 async def _refresh_question():
+                    play_sound("buzz")
                     page.views.clear()
                     page.views.append(
                         ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
@@ -273,6 +361,22 @@ def setup_router(page: ft.Page, state: AppState):
 
                 if page.session and page.session.connection:
                     page.run_task(_refresh_question)
+            return
+
+        if msg_type == "player_estimate" and _get_role(page) == "host":
+            player_id = msg.get("player_id", "")
+            answer = msg.get("answer", "")
+            state.estimates[player_id] = answer
+
+            async def _refresh_estimates():
+                page.views.clear()
+                page.views.append(
+                    ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
+                )
+                page.update()
+
+            if page.session and page.session.connection:
+                page.run_task(_refresh_estimates)
             return
 
         if msg_type != "lobby_state":

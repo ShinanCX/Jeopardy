@@ -16,7 +16,7 @@ def host_setup_view(
     count_label = ft.Text(str(max_players_val[0]), size=24, weight=ft.FontWeight.BOLD, width=40, text_align=ft.TextAlign.CENTER)
     error_text = ft.Text("", color="error", visible=False)
 
-    boards = list_boards()  # [(board_id, title), ...]
+    boards = [(bid, title) for bid, title, wip in list_boards() if not wip]
 
     def update_count(delta: int):
         new_val = max_players_val[0] + delta
@@ -27,7 +27,7 @@ def host_setup_view(
         count_label.update()
 
     def on_submit(_):
-        board_id = board_control.value if isinstance(board_control, ft.Dropdown) else None
+        board_id = board_dd.value if boards else None
         if not board_id:
             error_text.value = "Bitte ein Board auswählen."
             error_text.visible = True
@@ -44,11 +44,12 @@ def host_setup_view(
     )
 
     if boards:
-        board_control = ft.Dropdown(
+        board_dd = ft.Dropdown(
             label="Board auswählen",
-            width=280,
+            width=240,
             options=[ft.dropdown.Option(key=bid, text=title) for bid, title in boards],
         )
+        board_control = board_dd
     else:
         board_control = ft.Text(
             "Keine Boards gefunden. Lege ein Board unter boards/<name>/board.json an.",

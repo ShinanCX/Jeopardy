@@ -1,5 +1,8 @@
 {
   "title": "Allgemeinwissen",
+  "wip": false,
+  "num_categories": 6,
+  "num_questions_per_cat": 5,
   "categories": [
     {
       "title": "Geographie",
@@ -7,9 +10,10 @@
         {
           "value": 100,
           "question": {
-            "type": "text",
+            "type": "image",
             "prompt": "Hauptstadt von Frankreich?",
-            "answer": "Paris"
+            "answer": "Paris",
+            "asset": "images/9bfc7349862a12dfa3943548984c419a.jpg"
           }
         },
         {
@@ -17,7 +21,8 @@
           "question": {
             "type": "text",
             "prompt": "Welcher Fluss fließt durch Wien?",
-            "answer": "Donau"
+            "answer": "Donau",
+            "asset": null
           }
         },
         {
@@ -25,7 +30,8 @@
           "question": {
             "type": "text",
             "prompt": "Wie heißt der höchste Berg Afrikas?",
-            "answer": "Kilimandscharo"
+            "answer": "Kilimandscharo",
+            "asset": null
           }
         },
         {
@@ -33,7 +39,8 @@
           "question": {
             "type": "text",
             "prompt": "In welchem Land liegt Machu Picchu?",
-            "answer": "Peru"
+            "answer": "Peru",
+            "asset": null
           }
         },
         {
@@ -41,7 +48,8 @@
           "question": {
             "type": "text",
             "prompt": "Welches Land hat die längste Küstenlinie der Welt?",
-            "answer": "Kanada"
+            "answer": "Kanada",
+            "asset": null
           }
         }
       ]
@@ -54,7 +62,8 @@
           "question": {
             "type": "text",
             "prompt": "In welchem Jahr fiel die Berliner Mauer?",
-            "answer": "1989"
+            "answer": "1989",
+            "asset": null
           }
         },
         {
@@ -62,7 +71,8 @@
           "question": {
             "type": "text",
             "prompt": "Wer war der erste Mensch auf dem Mond?",
-            "answer": "Neil Armstrong"
+            "answer": "Neil Armstrong",
+            "asset": null
           }
         },
         {
@@ -70,7 +80,8 @@
           "question": {
             "type": "text",
             "prompt": "Welches Schiff sank 1912 nach einer Kollision mit einem Eisberg?",
-            "answer": "Titanic"
+            "answer": "Titanic",
+            "asset": null
           }
         },
         {
@@ -78,7 +89,8 @@
           "question": {
             "type": "text",
             "prompt": "In welchem Jahr begann der Erste Weltkrieg?",
-            "answer": "1914"
+            "answer": "1914",
+            "asset": null
           }
         },
         {
@@ -86,7 +98,8 @@
           "question": {
             "type": "text",
             "prompt": "Wer entschlüsselte den Enigma-Code im Zweiten Weltkrieg maßgeblich?",
-            "answer": "Alan Turing"
+            "answer": "Alan Turing",
+            "asset": null
           }
         }
       ]
@@ -99,7 +112,8 @@
           "question": {
             "type": "text",
             "prompt": "Chemisches Symbol für Gold?",
-            "answer": "Au"
+            "answer": "Au",
+            "asset": null
           }
         },
         {
@@ -107,7 +121,8 @@
           "question": {
             "type": "text",
             "prompt": "Wie viele Planeten hat unser Sonnensystem?",
-            "answer": "8"
+            "answer": "8",
+            "asset": null
           }
         },
         {
@@ -115,7 +130,8 @@
           "question": {
             "type": "text",
             "prompt": "Was ist die Lichtgeschwindigkeit in km/s (gerundet)?",
-            "answer": "300.000 km/s"
+            "answer": "300.000 km/s",
+            "asset": null
           }
         },
         {
@@ -123,7 +139,8 @@
           "question": {
             "type": "text",
             "prompt": "Wie lautet die chemische Formel für Wasser?",
-            "answer": "H₂O"
+            "answer": "H₂O",
+            "asset": null
           }
         },
         {
@@ -131,7 +148,8 @@
           "question": {
             "type": "text",
             "prompt": "Welches Organ produziert Insulin?",
-            "answer": "Bauchspeicheldrüse"
+            "answer": "Bauchspeicheldrüse",
+            "asset": null
           }
         }
       ]
@@ -144,7 +162,8 @@
           "question": {
             "type": "text",
             "prompt": "Wer malte die Mona Lisa?",
-            "answer": "Leonardo da Vinci"
+            "answer": "Leonardo da Vinci",
+            "asset": null
           }
         },
         {
@@ -152,7 +171,8 @@
           "question": {
             "type": "text",
             "prompt": "Von wem stammt die Sinfonie Nr. 9 in d-Moll?",
-            "answer": "Ludwig van Beethoven"
+            "answer": "Ludwig van Beethoven",
+            "asset": null
           }
         },
         {
@@ -160,7 +180,8 @@
           "question": {
             "type": "text",
             "prompt": "Wie heißt der Zauberschüler in J.K. Rowlings Romanen?",
-            "answer": "Harry Potter"
+            "answer": "Harry Potter",
+            "asset": null
           }
         },
         {
@@ -168,7 +189,8 @@
           "question": {
             "type": "text",
             "prompt": "In welcher Stadt steht das Kolosseum?",
-            "answer": "Rom"
+            "answer": "Rom",
+            "asset": null
           }
         },
         {
@@ -176,7 +198,8 @@
           "question": {
             "type": "text",
             "prompt": "Welcher Schriftsteller schrieb 'Faust'?",
-            "answer": "Johann Wolfgang von Goethe"
+            "answer": "Johann Wolfgang von Goethe",
+            "asset": null
           }
         }
       ]
@@ -189,7 +212,8 @@
           "question": {
             "type": "text",
             "prompt": "Wie viele Spieler hat eine Fußballmannschaft auf dem Feld?",
-            "answer": "11"
+            "answer": "11",
+            "asset": null
           }
         },
         {
@@ -197,7 +221,8 @@
           "question": {
             "type": "text",
             "prompt": "In welchem Land fanden die Olympischen Sommerspiele 2024 statt?",
-            "answer": "Frankreich"
+            "answer": "Frankreich",
+            "asset": null
           }
         },
         {
@@ -205,7 +230,8 @@
           "question": {
             "type": "text",
             "prompt": "Wie nennt man einen Treffer über Par im Golf?",
-            "answer": "Birdie"
+            "answer": "Birdie",
+            "asset": null
           }
         },
         {
@@ -213,7 +239,8 @@
           "question": {
             "type": "text",
             "prompt": "Über welche Distanz wird der klassische Marathon gelaufen?",
-            "answer": "42,195 km"
+            "answer": "42,195 km",
+            "asset": null
           }
         },
         {
@@ -221,7 +248,8 @@
           "question": {
             "type": "text",
             "prompt": "Wie viele Grand-Slam-Titel gewann Roger Federer?",
-            "answer": "20"
+            "answer": "20",
+            "asset": null
           }
         }
       ]
@@ -234,7 +262,8 @@
           "question": {
             "type": "text",
             "prompt": "Was bedeutet die Abkürzung 'CPU'?",
-            "answer": "Central Processing Unit"
+            "answer": "Central Processing Unit",
+            "asset": null
           }
         },
         {
@@ -242,7 +271,8 @@
           "question": {
             "type": "text",
             "prompt": "In welchem Jahr wurde das World Wide Web erfunden?",
-            "answer": "1989"
+            "answer": "1989",
+            "asset": null
           }
         },
         {
@@ -250,7 +280,8 @@
           "question": {
             "type": "text",
             "prompt": "Wie viel Byte hat ein Kilobyte (binär)?",
-            "answer": "1024"
+            "answer": "1024",
+            "asset": null
           }
         },
         {
@@ -258,7 +289,8 @@
           "question": {
             "type": "text",
             "prompt": "Welche Programmiersprache wurde von Guido van Rossum entwickelt?",
-            "answer": "Python"
+            "answer": "Python",
+            "asset": null
           }
         },
         {
@@ -266,7 +298,8 @@
           "question": {
             "type": "text",
             "prompt": "Was steht hinter dem Begriff 'Moore's Law'?",
-            "answer": "Die Transistoranzahl auf Chips verdoppelt sich etwa alle zwei Jahre"
+            "answer": "Die Transistoranzahl auf Chips verdoppelt sich etwa alle zwei Jahre",
+            "asset": null
           }
         }
       ]

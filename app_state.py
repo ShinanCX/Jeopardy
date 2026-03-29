@@ -46,7 +46,8 @@ class AppState:
     question_answerer_index: int = 0  # wer darf gerade antworten (kann wechseln)
     question_answer_revealed: bool = False
     buzzer_open: bool = False  # sind Buzzers offen?
-    buzzed_queue: list[int] = field(default_factory=list)  # später live; jetzt vorbereitet
+    buzzed_queue: list[int] = field(default_factory=list)
+    estimates: dict = field(default_factory=dict)  # {player_id: answer} für Schätzfragen
 
     def remove_player(self, player_id: str):
         """Entfernt einen Spieler anhand seiner player_id."""
@@ -119,6 +120,7 @@ class AppState:
         self.question_answer_revealed = False
         self.buzzer_open = False
         self.buzzed_queue = []
+        self.estimates = {}
 
     def open_buzzer(self):
         """Host öffnet Buzzers für alle außer dem aktuellen Answerer."""
@@ -226,6 +228,7 @@ class AppState:
             "question_answer_revealed": self.question_answer_revealed,
             "buzzer_open": self.buzzer_open,
             "buzzed_queue": list(self.buzzed_queue),
+            "estimates": dict(self.estimates),
         }
 
     def apply_snapshot(self, snap: dict) -> None:
@@ -280,3 +283,6 @@ class AppState:
                 self.buzzed_queue = [int(x) for x in snap["buzzed_queue"]]
             except Exception:
                 self.buzzed_queue = []
+
+        if "estimates" in snap and isinstance(snap["estimates"], dict):
+            self.estimates = snap["estimates"]
