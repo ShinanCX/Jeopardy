@@ -28,7 +28,7 @@ MIME_OVERRIDES = {
     ".mjs": "application/javascript",
     ".wasm": "application/wasm",
     ".js": "application/javascript",
-    ".html": "text/html; charset=utf-8",
+    ".html": "text/html",
     ".css": "text/css",
     ".json": "application/json",
     ".png": "image/png",
@@ -86,7 +86,7 @@ async def static_handler(request: web.Request) -> web.Response:
     suffix = file_path.suffix.lower()
     content_type = MIME_OVERRIDES.get(suffix, "application/octet-stream")
 
-    return web.Response(body=file_path.read_bytes(), content_type=content_type)
+    return web.Response(body=file_path.read_bytes(), content_type=content_type, charset="utf-8" if content_type in ("text/html", "text/css", "application/javascript", "application/json") else None)
 
 
 def create_app() -> web.Application:
