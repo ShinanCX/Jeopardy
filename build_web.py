@@ -17,11 +17,13 @@ INDEX_HTML = Path(__file__).parent / "build" / "web" / "index.html"
 
 WEBSOCKET_PATCH = """\
   <script>
-    // Leite WebSocket-Verbindungen an den Flet-Python-Server auf Port 8550 um
+    // WebSocket-Verbindungen bleiben auf demselben Host/Port (serve_build.py proxied /ws)
     const _OrigWS = window.WebSocket;
     window.WebSocket = function(url, ...args) {
-      if (typeof url === "string") {
-        url = url.replace(/^ws:\\/\\/[^/]+\\/ws/, "ws://localhost:8550/ws");
+      if (typeof url === "string" && url.includes("/ws")) {
+        const loc = window.location;
+        const proto = loc.protocol === "https:" ? "wss:" : "ws:";
+        url = proto + "//" + loc.host + "/ws";
       }
       return new _OrigWS(url, ...args);
     };
@@ -51,8 +53,9 @@ def patch_index_html():
 def main():
     print("=== flet build web ===")
     result = subprocess.run(
-        [sys.executable, "-m", "flet", "build", "web"],
+        ["flet", "build", "web"],
         cwd=Path(__file__).parent,
+        shell=True,
     )
     if result.returncode != 0:
         print("✗ Build fehlgeschlagen.")

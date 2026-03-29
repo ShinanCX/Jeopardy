@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "flet==0.83.0",
     "flet-audio==0.83.0",
+    "aiohttp>=3.13",
 ]
 
 [tool.flet]
