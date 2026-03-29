@@ -15,10 +15,17 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent
 
 
-def stream_output(proc: subprocess.Popen, prefix: str):
+def stream_output(proc: subprocess.Popen, prefix: str, filter_fn=None):
     """Gibt die Ausgabe eines Prozesses mit Präfix aus."""
     for line in iter(proc.stdout.readline, b""):
-        print(f"[{prefix}] {line.decode(errors='replace').rstrip()}")
+        decoded = line.decode(errors="replace").rstrip()
+        if filter_fn is None or filter_fn(decoded):
+            print(f"[{prefix}] {decoded}")
+
+
+def _tunnel_filter(line: str) -> bool:
+    """Zeigt nur die Tunnel-URL und Fehler an."""
+    return "trycloudflare.com" in line or "ERR" in line
 
 
 def main():
@@ -57,7 +64,7 @@ def main():
             stderr=subprocess.STDOUT,
         )
         procs.append(p_cf)
-        threading.Thread(target=stream_output, args=(p_cf, "tunnel"), daemon=True).start()
+        threading.Thread(target=stream_output, args=(p_cf, "tunnel", _tunnel_filter), daemon=True).start()
         print("[start] Cloudflare-Tunnel gestartet — URL erscheint gleich oben")
 
         # Alle Prozesse laufen lassen bis Strg+C
