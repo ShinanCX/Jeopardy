@@ -92,8 +92,14 @@ def setup_router(page: ft.Page, state: AppState):
 
     def play_sound(name: str):
         audio = _sounds.get(name)
-        if audio and page.session and page.session.connection:
-            page.run_task(audio.play)
+        if not (audio and page.session and page.session.connection):
+            return
+        async def _play_safe():
+            try:
+                await audio.play()
+            except Exception:
+                pass
+        page.run_task(_play_safe)
 
     def broadcast_sound(name: str):
         """Host sendet Sound-Event an alle Clients."""
