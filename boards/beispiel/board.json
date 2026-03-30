@@ -19,10 +19,10 @@
         {
           "value": 200,
           "question": {
-            "type": "text",
+            "type": "audio",
             "prompt": "Welcher Fluss fließt durch Wien?",
             "answer": "Donau",
-            "asset": null
+            "asset": "sounds/Erstmal_ein_bauen_Soundboard.mp3"
           }
         },
         {

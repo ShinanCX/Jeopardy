@@ -81,6 +81,7 @@ def _create_board_skeleton(board_id: str, title: str, num_cats: int, num_q: int)
     board_dir = BOARDS_DIR / board_id
     board_dir.mkdir(parents=True, exist_ok=True)
     (board_dir / "images").mkdir(exist_ok=True)
+    (board_dir / "sounds").mkdir(exist_ok=True)
     data = {
         "title": title,
         "wip": True,
@@ -114,6 +115,7 @@ def _save_board(board_id: str, title: str, cats: list[_CatData], num_cats_target
     board_dir = BOARDS_DIR / board_id
     board_dir.mkdir(parents=True, exist_ok=True)
     (board_dir / "images").mkdir(exist_ok=True)
+    (board_dir / "sounds").mkdir(exist_ok=True)
     data = {
         "title": title,
         "wip": not complete,
@@ -323,21 +325,23 @@ def board_editor_view(
             on_change=lambda e: setattr(q, "answer", e.data),
         )
         asset_tf = ft.TextField(
-            label="Asset-Pfad (z. B. images/bild.png)",
+            label="Asset-Pfad",
             value=q.asset,
             expand=True,
-            hint_text="Relativ zum Board-Verzeichnis",
+            hint_text="Relativ zum Board-Verzeichnis (images/... oder sounds/...)",
         )
         _asset_tfs[(cat_i, q_i)] = asset_tf
 
-        def pick_asset(_q=q, _tf=asset_tf):
+        def pick_asset(_tf=asset_tf):
             async def _do():
                 try:
                     files = await _file_picker.pick_files(allow_multiple=False, with_data=True)
                     if not files:
                         return
                     picked = files[0]
-                    dest_dir = board_dir / "images"
+                    current_type = type_dd.value or "image"
+                    sub_dir = "sounds" if current_type == "audio" else "images"
+                    dest_dir = board_dir / sub_dir
                     dest_dir.mkdir(exist_ok=True)
                     dest = dest_dir / picked.name
                     if picked.bytes:
@@ -346,7 +350,7 @@ def board_editor_view(
                         shutil.copy2(picked.path, dest)
                     else:
                         return
-                    rel_path = f"images/{picked.name}"
+                    rel_path = f"{sub_dir}/{picked.name}"
                     _tf.value = rel_path
                     _tf.update()
                 except Exception as ex:

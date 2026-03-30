@@ -1,5 +1,7 @@
+import asyncio
 import json
 import threading
+import time
 import uuid
 from pathlib import Path
 import flet as ft
@@ -64,11 +66,22 @@ def setup_router(page: ft.Page, state: AppState):
     _assets_dir = Path(__file__).parent.parent / "assets"
     _sound_files = {"buzz": "buzz.mp3", "correct_answer": "correct_answer.mp3", "wrong_answer": "wrong_answer.mp3"}
     _sounds = {}
+    _q_audio = [None]              # aktiver FletAudio-Control für Frage-Audio
+    _q_audio_duration = [None]    # gecachte Duration als int (ms) via on_duration_change
+    _q_audio_position = [None]    # gecachte Position als (int ms, float monotonic_time) via on_position_change
+    _pending_audio_src = [None]   # vorgemerkter Src, wird nach views.append() angewendet
+    _flet_audio_available = [False]
+    _flet_audio_works = [None]    # None=ungetestet, True=funktioniert, False=kein Flutter-Build
+    _flet_audio_cls = None
+    _release_mode_stop = None
     try:
-        from flet_audio import Audio as FletAudio, ReleaseMode
+        from flet_audio import Audio as _FA, ReleaseMode as _RM
+        _flet_audio_cls = _FA
+        _release_mode_stop = _RM.STOP
+        _flet_audio_available[0] = True
         for name, filename in _sound_files.items():
             if (_assets_dir / filename).exists():
-                audio = FletAudio(src=filename, autoplay=False, release_mode=ReleaseMode.STOP)
+                audio = _flet_audio_cls(src=filename, autoplay=False, release_mode=_release_mode_stop)
                 page.services.append(audio)
                 _sounds[name] = audio
         if _sounds:
@@ -91,6 +104,103 @@ def setup_router(page: ft.Page, state: AppState):
             "lobby_id": lobby_id,
             "name": name,
         }))
+
+    def set_question_audio_src(src: str):
+        """Merkt Audio-Src vor; _apply_pending_audio() führt die eigentliche Arbeit durch."""
+        _pending_audio_src[0] = src
+
+    def _apply_pending_audio():
+        """Muss nach page.views.append() aufgerufen werden, damit page.services erreichbar ist."""
+        src = _pending_audio_src[0]
+        _pending_audio_src[0] = None
+        if not src or not _flet_audio_available[0]:
+            return
+        if _q_audio[0] and _q_audio[0] in page.services:
+            page.services.remove(_q_audio[0])
+        fa = _flet_audio_cls(src=src, autoplay=False, release_mode=_release_mode_stop)
+
+        # Event-basierte Duration- und Positions-Aktualisierung (zuverlässiger als Polling)
+        def _on_duration_change(e):
+            try:
+                ms = e.duration.in_milliseconds
+                _q_audio_duration[0] = ms
+                _flet_audio_works[0] = True
+                print(f"[AUDIO] on_duration_change: {ms}ms")
+            except Exception as ex:
+                print(f"[AUDIO] on_duration_change error: {ex}")
+
+        def _on_position_change(e):
+            try:
+                _q_audio_position[0] = (e.position, time.monotonic())
+            except Exception:
+                pass
+
+        fa.on_duration_change = _on_duration_change
+        fa.on_position_change = _on_position_change
+
+        _q_audio_duration[0] = None
+        _q_audio_position[0] = None
+        page.services.append(fa)
+        _q_audio[0] = fa
+        _flet_audio_works[0] = None  # wird durch on_duration_change oder play()-Timeout gesetzt
+        # Lautstärke wird in play_question_audio() direkt vor fa.play() angewendet,
+        # wenn Flutter das Control bereits kennt (nach page.update()).
+
+    def play_question_audio():
+        """Spielt das geladene Frage-Audio ab. Timeout dient zur Dev-Modus-Erkennung."""
+        if not _q_audio[0]:
+            return
+        # Position auf (0, jetzt) setzen → Interpolation startet sofort ab 0ms
+        _q_audio_position[0] = (0, time.monotonic())
+        fa = _q_audio[0]
+
+        async def _do_play():
+            # Lautstärke direkt vor play() setzen: Flutter kennt das Control bereits,
+            # da page.update() bei der Fragenanzeige schon gelaufen ist.
+            saved_vol = page.session.store.get("_audio_volume")
+            print(f"[VOL] _do_play: saved_vol={saved_vol!r}")
+            if saved_vol is not None:
+                fa.volume = float(saved_vol)
+                fa.update()
+            try:
+                await asyncio.wait_for(fa.play(), timeout=3.0)
+                # _flet_audio_works wird via on_duration_change gesetzt; hier nur Fallback
+                if _flet_audio_works[0] is None:
+                    _flet_audio_works[0] = True
+            except Exception:
+                _flet_audio_works[0] = False
+
+        page.run_task(_do_play)
+
+    def broadcast_question_audio():
+        """Sendet Play-Event für Frage-Audio an alle Clients."""
+        lobby_id = _get_lobby_id(page)
+        if not lobby_id:
+            return
+        page.pubsub.send_all(json.dumps({
+            "type": "play_question_audio",
+            "lobby_id": lobby_id,
+        }))
+
+    def get_audio_position():
+        """Gibt die interpolierte Abspielposition zurück (int ms).
+        Interpoliert zwischen on_position_change-Events; gecappt auf 900ms um
+        Overshoot und Rücksprünge beim nächsten Event zu vermeiden."""
+        data = _q_audio_position[0]
+        if data is None:
+            return None
+        pos_ms, t = data
+        # Cap: nie mehr als 900ms über den letzten Event-Wert hinaus interpolieren
+        elapsed_ms = min(int((time.monotonic() - t) * 1000), 900)
+        return pos_ms + elapsed_ms
+
+    def set_audio_volume(value: float):
+        """Setzt die lokale Lautstärke (0.0–1.0)."""
+        clamped = max(0.0, min(1.0, value))
+        print(f"[VOL] set_audio_volume({clamped:.2f}), fa exists={_q_audio[0] is not None}")
+        if _q_audio[0]:
+            _q_audio[0].volume = clamped
+            _q_audio[0].update()
 
     def broadcast_state():
         role = _get_role(page)
@@ -133,6 +243,14 @@ def setup_router(page: ft.Page, state: AppState):
                 broadcast_state=broadcast_state,
                 play_sound=play_sound,
                 broadcast_sound=broadcast_sound,
+                play_question_audio=play_question_audio,
+                broadcast_question_audio=broadcast_question_audio,
+                set_question_audio_src=set_question_audio_src,
+                flet_audio_available=_flet_audio_available[0],
+                flet_audio_works_ref=lambda: _flet_audio_works[0],
+                get_audio_duration_fn=lambda: _q_audio_duration[0],
+                get_audio_position_fn=get_audio_position,
+                set_audio_volume_fn=set_audio_volume,
             )
 
         return ft.Text(f"Unbekannter Screen: {state.screen}")
@@ -326,6 +444,7 @@ def setup_router(page: ft.Page, state: AppState):
         page.views.append(
             ft.View(route=route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
         )
+        _apply_pending_audio()
         page.update()
 
     def view_pop(e: ft.ViewPopEvent):
@@ -352,6 +471,13 @@ def setup_router(page: ft.Page, state: AppState):
             play_sound(msg.get("name", ""))
             return
 
+        if msg_type == "play_question_audio":
+            play_question_audio()
+            fn = page.session.store.get("_trigger_question_audio")
+            if callable(fn):
+                fn()
+            return
+
         if msg_type in ("player_join", "player_leave") and _get_role(page) == "host":
             if msg_type == "player_join":
                 state.add_player(msg.get("player_id", ""), msg.get("name", "Spieler"))
@@ -364,6 +490,7 @@ def setup_router(page: ft.Page, state: AppState):
                 page.views.append(
                     ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
                 )
+                _apply_pending_audio()
                 page.update()
 
             if page.session and page.session.connection:
@@ -388,6 +515,7 @@ def setup_router(page: ft.Page, state: AppState):
                     page.views.append(
                         ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
                     )
+                    _apply_pending_audio()
                     page.update()
 
                 if page.session and page.session.connection:
@@ -404,6 +532,7 @@ def setup_router(page: ft.Page, state: AppState):
                 page.views.append(
                     ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
                 )
+                _apply_pending_audio()
                 page.update()
 
             if page.session and page.session.connection:
@@ -437,6 +566,7 @@ def setup_router(page: ft.Page, state: AppState):
             page.views.append(
                 ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
             )
+            _apply_pending_audio()
             page.update()
 
         if page.session and page.session.connection:
