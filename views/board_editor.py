@@ -332,10 +332,14 @@ def board_editor_view(
         )
         _asset_tfs[(cat_i, q_i)] = asset_tf
 
-        def pick_asset(_tf=asset_tf):
+        def pick_asset(_e, _tf=asset_tf):
             async def _do():
                 try:
-                    files = await _file_picker.pick_files(allow_multiple=False, with_data=True)
+                    current_type = type_dd.value or "image"
+                    allowed = ["mp3"] if current_type == "audio" else ["png", "jpg", "jpeg"]
+                    files = await _file_picker.pick_files(
+                        allow_multiple=False, with_data=True, allowed_extensions=allowed
+                    )
                     if not files:
                         return
                     picked = files[0]
@@ -343,7 +347,6 @@ def board_editor_view(
                     safe_name = Path(picked.name).name
                     if not safe_name:
                         return
-                    current_type = type_dd.value or "image"
                     sub_dir = "sounds" if current_type == "audio" else "images"
                     dest_dir = board_dir / sub_dir
                     dest_dir.mkdir(exist_ok=True)
