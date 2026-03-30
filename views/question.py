@@ -342,14 +342,12 @@ def question_view(
             async def _run_progress():
                 # Duration frisch lesen; falls Test noch läuft kurz warten
                 duration_ms = _get_duration_ms()
-                print(f"[AUDIO] _run_progress start, duration_ms={duration_ms}")
                 if duration_ms is None and get_audio_duration_fn:
                     for _ in range(15):  # bis zu 3s warten
                         await asyncio.sleep(0.2)
                         duration_ms = _get_duration_ms()
                         if duration_ms is not None:
                             break
-                print(f"[AUDIO] _run_progress duration nach Warten: {duration_ms}")
 
                 dur_str = _fmt(duration_ms) if duration_ms else "--:--"
                 time_text.value = f"0:00 / {dur_str}"
@@ -362,7 +360,6 @@ def question_view(
 
                 while is_playing[0]:
                     if _audio_known_broken():
-                        print("[AUDIO] Loop: audio known broken, break")
                         break
                     pos_ms = None
                     if get_audio_position_fn and duration_ms:
@@ -444,7 +441,6 @@ def question_view(
 
             def on_volume_change(e):
                 val = e.control.value
-                print(f"[VOL] slider on_change_end: val={val!r} (type={type(val).__name__})")
                 page.session.store.set("_audio_volume", val)
                 if set_audio_volume_fn:
                     set_audio_volume_fn(val)

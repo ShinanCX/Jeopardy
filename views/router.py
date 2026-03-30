@@ -126,7 +126,6 @@ def setup_router(page: ft.Page, state: AppState):
                 ms = e.duration.in_milliseconds
                 _q_audio_duration[0] = ms
                 _flet_audio_works[0] = True
-                print(f"[AUDIO] on_duration_change: {ms}ms")
             except Exception as ex:
                 print(f"[AUDIO] on_duration_change error: {ex}")
 
@@ -148,7 +147,7 @@ def setup_router(page: ft.Page, state: AppState):
         # wenn Flutter das Control bereits kennt (nach page.update()).
 
     def play_question_audio():
-        """Spielt das geladene Frage-Audio ab. Timeout dient zur Dev-Modus-Erkennung."""
+        """Spielt das geladene Frage-Audio ab."""
         if not _q_audio[0]:
             return
         # Position auf (0, jetzt) setzen → Interpolation startet sofort ab 0ms
@@ -199,7 +198,6 @@ def setup_router(page: ft.Page, state: AppState):
     def set_audio_volume(value: float):
         """Setzt die lokale Lautstärke (0.0–1.0)."""
         clamped = max(0.0, min(1.0, value))
-        print(f"[VOL] set_audio_volume({clamped:.2f}), fa exists={_q_audio[0] is not None}")
         if _q_audio[0]:
             _q_audio[0].volume = clamped
             _q_audio[0].update()
