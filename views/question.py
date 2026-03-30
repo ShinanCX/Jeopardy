@@ -437,7 +437,10 @@ def question_view(
 
             # Lautstärkeregler — Wert wird in der Session gespeichert (fragenübergreifend)
             _saved_vol = page.session.store.get("_audio_volume")
-            _current_vol = float(_saved_vol) if _saved_vol is not None else 1.0
+            try:
+                _current_vol = max(0.0, min(1.0, float(_saved_vol))) if _saved_vol is not None else 1.0
+            except (TypeError, ValueError):
+                _current_vol = 1.0
 
             def on_volume_change(e):
                 val = e.control.value

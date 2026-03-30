@@ -1,5 +1,6 @@
 import asyncio
 import json
+import secrets
 import threading
 import time
 import uuid
@@ -159,8 +160,11 @@ def setup_router(page: ft.Page, state: AppState):
             # da page.update() bei der Fragenanzeige schon gelaufen ist.
             saved_vol = page.session.store.get("_audio_volume")
             if saved_vol is not None:
-                fa.volume = float(saved_vol)
-                fa.update()
+                try:
+                    fa.volume = max(0.0, min(1.0, float(saved_vol)))
+                    fa.update()
+                except (TypeError, ValueError):
+                    pass
             try:
                 await fa.play()
                 if _flet_audio_works[0] is None:
@@ -270,7 +274,7 @@ def setup_router(page: ft.Page, state: AppState):
         def on_create(settings: dict):
             s = _store(page)
             s.set("role", "host")
-            s.set("lobby_id", str(uuid.uuid4())[:8].upper())
+            s.set("lobby_id", secrets.token_hex(4).upper())
             s.set("board_id", settings.get("board_id", ""))
             state.players.clear()
             state.board = None
