@@ -13,7 +13,11 @@ def lobby_view(page: ft.Page, state: AppState, rerender, *, broadcast_state=None
         if not is_host:
             return
         board_id = page.session.store.get("board_id") or ""
-        state.board = load_board(board_id)
+        try:
+            state.board = load_board(board_id)
+        except ValueError as e:
+            print(f"[Lobby] Board laden fehlgeschlagen: {e}")
+            return
         state.ensure_players()
         for p in state.players:
             p.score = 0

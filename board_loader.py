@@ -29,10 +29,19 @@ def list_boards() -> list[tuple[str, str, bool]]:
 
 
 def load_board(board_id: str) -> Board:
-    """Lädt ein Board anhand seiner ID aus dem boards-Verzeichnis."""
+    """Lädt ein Board anhand seiner ID aus dem boards-Verzeichnis.
+    Wirft ValueError wenn das Board nicht gefunden oder ungültig ist."""
     board_dir = BOARDS_DIR / board_id
+    if not board_dir.is_dir():
+        raise ValueError(f"Board-Verzeichnis nicht gefunden: {board_id!r}")
     json_path = board_dir / "board.json"
-    data = json.loads(json_path.read_text(encoding="utf-8"))
+    if not json_path.exists():
+        raise ValueError(f"board.json fehlt für Board: {board_id!r}")
+
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Ungültiges JSON in board.json ({board_id!r}): {e}") from e
 
     categories = []
     for cat_data in data.get("categories", []):
@@ -41,7 +50,12 @@ def load_board(board_id: str) -> Board:
             q = tile_data.get("question", {})
             asset = q.get("asset")
             if asset:
-                asset = str(board_dir / asset)
+                # Pfad auf BOARDS_DIR beschränken (kein Path Traversal)
+                resolved = (board_dir / asset).resolve()
+                if resolved.is_relative_to(BOARDS_DIR.resolve()):
+                    asset = str(resolved)
+                else:
+                    asset = None
             tiles.append(Tile(
                 value=int(tile_data.get("value", 0)),
                 question=Question(
