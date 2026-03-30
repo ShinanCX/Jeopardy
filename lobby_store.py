@@ -14,8 +14,11 @@ class LobbyState:
 
 LOBBIES: Dict[str, LobbyState] = {}
 
+_LOBBY_MAX_AGE_S = 4 * 3600  # 4 Stunden
+
 
 def get_lobby(lobby_id: str) -> LobbyState:
+    _cleanup_old_lobbies()
     l = LOBBIES.get(lobby_id)
     if l is None:
         l = LobbyState(lobby_id=lobby_id)
@@ -29,3 +32,11 @@ def update_lobby(lobby_id: str, patch: Dict[str, Any]) -> LobbyState:
     l.updated_at = time.time()
     l.data.update(patch)
     return l
+
+
+def _cleanup_old_lobbies() -> None:
+    """Entfernt Lobbies, die seit mehr als _LOBBY_MAX_AGE_S nicht aktualisiert wurden."""
+    cutoff = time.time() - _LOBBY_MAX_AGE_S
+    stale = [lid for lid, l in LOBBIES.items() if l.updated_at < cutoff]
+    for lid in stale:
+        del LOBBIES[lid]
