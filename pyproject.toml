@@ -9,6 +9,12 @@ dependencies = [
     "aiohttp>=3.13",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.flet]
 app_name = "Jeopardy"
 description = "Jeopardy Quiz Game"
