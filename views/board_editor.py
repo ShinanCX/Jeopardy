@@ -339,22 +339,30 @@ def board_editor_view(
                     if not files:
                         return
                     picked = files[0]
+                    # Dateinamen sanitizen: nur den letzten Pfadteil verwenden
+                    safe_name = Path(picked.name).name
+                    if not safe_name:
+                        return
                     current_type = type_dd.value or "image"
                     sub_dir = "sounds" if current_type == "audio" else "images"
                     dest_dir = board_dir / sub_dir
                     dest_dir.mkdir(exist_ok=True)
-                    dest = dest_dir / picked.name
+                    dest = dest_dir / safe_name
                     if picked.bytes:
                         dest.write_bytes(picked.bytes)
                     elif picked.path:
                         shutil.copy2(picked.path, dest)
                     else:
+                        _tf.error_text = "Keine Dateidaten erhalten"
+                        _tf.update()
                         return
-                    rel_path = f"{sub_dir}/{picked.name}"
-                    _tf.value = rel_path
+                    _tf.error_text = None
+                    _tf.value = f"{sub_dir}/{safe_name}"
                     _tf.update()
                 except Exception as ex:
                     print(f"[FilePicker] Fehler: {ex}")
+                    _tf.error_text = f"Fehler: {ex}"
+                    _tf.update()
             page.run_task(_do)
 
         asset_row = ft.Row(
