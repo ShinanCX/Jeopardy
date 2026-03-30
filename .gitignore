@@ -2,6 +2,8 @@
 /test.py
 /build/
 /.claude/
+__pycache__/
+*.pyc
 
 # Boards: nur beispiel-board tracken, alle anderen ignorieren
 /boards/*/
