@@ -92,7 +92,7 @@ def setup_router(page: ft.Page, state: AppState):
 
     def play_sound(name: str):
         audio = _sounds.get(name)
-        if audio:
+        if audio and page.session and page.session.connection:
             page.run_task(audio.play)
 
     def broadcast_sound(name: str):
@@ -155,6 +155,8 @@ def setup_router(page: ft.Page, state: AppState):
         fa = _q_audio[0]
 
         async def _do_play():
+            if not (page.session and page.session.connection):
+                return
             # Lautstärke direkt vor play() setzen: Flutter kennt das Control bereits,
             # da page.update() bei der Fragenanzeige schon gelaufen ist.
             saved_vol = page.session.store.get("_audio_volume")
