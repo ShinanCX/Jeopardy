@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
+import math
+import time
 from pathlib import Path
 
 import flet as ft
@@ -17,6 +21,14 @@ def question_view(
     caps: Capabilities | None = None,
     play_sound=None,
     broadcast_sound=None,
+    play_question_audio=None,
+    broadcast_question_audio=None,
+    set_question_audio_src=None,
+    flet_audio_available: bool = False,
+    flet_audio_works_ref=None,
+    get_audio_duration_fn=None,
+    get_audio_position_fn=None,
+    set_audio_volume_fn=None,
 ) -> ft.Control:
     # Guard rails
     if state.board is None or state.selected is None:
@@ -222,15 +234,28 @@ def question_view(
             if q.asset:
                 try:
                     from board_loader import BOARDS_DIR
-                    asset_path = Path(q.asset)
-                    try:
-                        rel = asset_path.relative_to(BOARDS_DIR)
-                        src = f"/boards/{rel.as_posix()}"
-                    except ValueError:
-                        # Pfad ist nicht unter BOARDS_DIR — Bytes-Fallback
-                        src = asset_path.read_bytes()
+                    rel = Path(q.asset).relative_to(BOARDS_DIR)
+                    src = f"/boards/{rel.as_posix()}"
+
+                    def _open_zoom(_e, _src=src):
+                        def _close(_):
+                            dlg.open = False
+                            page.update()
+                        dlg = ft.AlertDialog(
+                            content=ft.Image(src=_src, fit=ft.BoxFit.CONTAIN),
+                            content_padding=ft.padding.all(0),
+                            actions=[ft.TextButton("Schließen", on_click=_close)],
+                            open=True,
+                        )
+                        page.overlay.append(dlg)
+                        page.update()
+
                     controls.append(
-                        ft.Image(src=src, fit=ft.BoxFit.CONTAIN, height=300)
+                        ft.GestureDetector(
+                            content=ft.Image(src=src, fit=ft.BoxFit.CONTAIN, height=300),
+                            on_tap=_open_zoom,
+                            mouse_cursor=ft.MouseCursor.ZOOM_IN,
+                        )
                     )
                 except Exception as _img_err:
                     print(f"[Image] Fehler beim Laden: {_img_err!r}  path={q.asset!r}")
@@ -238,29 +263,232 @@ def question_view(
             return ft.Column(controls=controls, tight=True, spacing=8)
 
         if q_type == "audio":
+            # Audio-URL aus absolutem Pfad berechnen
+            audio_src = None
+            if q.asset:
+                try:
+                    from board_loader import BOARDS_DIR
+                    rel = Path(q.asset).relative_to(BOARDS_DIR)
+                    audio_src = f"/boards/{rel.as_posix()}"
+                except Exception:
+                    pass
+
+            if audio_src and set_question_audio_src:
+                set_question_audio_src(audio_src)
+
+            # Waveform-Balken: Höhen aus Dateinamen-Hash, Farbe = Fortschritt
+            _seed = Path(q.asset).name if q.asset else "default"
+            _h = hashlib.md5(_seed.encode()).digest()
+            base_heights = [8 + (_h[i % len(_h)] % 44) for i in range(24)]
+            is_playing = [False]
+
+            bars: list[ft.Container] = [
+                ft.Container(
+                    width=5,
+                    height=h,
+                    bgcolor="outline",   # unplayed = dunkel
+                    border_radius=2,
+                    animate=ft.Animation(80, ft.AnimationCurve.EASE_IN_OUT),
+                )
+                for h in base_heights
+            ]
+            waveform_row = ft.Row(
+                controls=bars,
+                alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=3,
+            )
+            waveform_box = ft.Container(
+                height=68,
+                border=ft.Border.all(1, color="outline"),
+                border_radius=10,
+                padding=ft.Padding(left=16, right=16, top=8, bottom=8),
+                content=waveform_row,
+                alignment=ft.Alignment(0, 0),
+            )
+
+            audio_status = ft.Text("", size=12, color="error", visible=False)
+
+            def _audio_known_broken() -> bool:
+                return bool(flet_audio_works_ref and flet_audio_works_ref() is False)
+
+            def _fmt(ms: int) -> str:
+                s = ms // 1000
+                return f"{s // 60}:{s % 60:02d}"
+
+            def _get_duration_ms() -> int | None:
+                """Liest Duration frisch aus dem Cache (int ms, via on_duration_change)."""
+                return get_audio_duration_fn() if get_audio_duration_fn else None
+
+            # Zeitanzeige — Duration evtl. noch nicht da (Test läuft async)
+            time_text = ft.Text(
+                "0:00 / --:--",
+                size=12,
+                opacity=0.6,
+                visible=flet_audio_available,
+            )
+
+            def _reset_bars():
+                for bar in bars:
+                    bar.bgcolor = "outline"
+                dur_ms = _get_duration_ms()
+                time_text.value = f"0:00 / {_fmt(dur_ms) if dur_ms else '--:--'}"
+                try:
+                    waveform_row.update()
+                    time_text.update()
+                except Exception:
+                    pass
+
+            async def _run_progress():
+                # Duration frisch lesen; falls Test noch läuft kurz warten
+                duration_ms = _get_duration_ms()
+                print(f"[AUDIO] _run_progress start, duration_ms={duration_ms}")
+                if duration_ms is None and get_audio_duration_fn:
+                    for _ in range(15):  # bis zu 3s warten
+                        await asyncio.sleep(0.2)
+                        duration_ms = _get_duration_ms()
+                        if duration_ms is not None:
+                            break
+                print(f"[AUDIO] _run_progress duration nach Warten: {duration_ms}")
+
+                dur_str = _fmt(duration_ms) if duration_ms else "--:--"
+                time_text.value = f"0:00 / {dur_str}"
+                try:
+                    time_text.update()
+                except Exception:
+                    pass
+
+                play_start = time.monotonic()
+
+                while is_playing[0]:
+                    if _audio_known_broken():
+                        print("[AUDIO] Loop: audio known broken, break")
+                        break
+                    pos_ms = None
+                    if get_audio_position_fn and duration_ms:
+                        pos_ms = get_audio_position_fn()  # interpoliert, int ms oder None
+
+                    if pos_ms is not None and duration_ms:
+                        fraction = min(1.0, pos_ms / duration_ms)
+                        filled = int(fraction * len(bars))
+                        for j, bar in enumerate(bars):
+                            bar.bgcolor = "primary" if j < filled else "outline"
+                        time_text.value = f"{_fmt(pos_ms)} / {dur_str}"
+                        try:
+                            waveform_row.update()
+                            time_text.update()
+                        except Exception:
+                            break
+                        if fraction >= 1.0:
+                            break
+
+                    # Sicherheits-Exit: länger als Duration + 3s aktiv → fertig
+                    elapsed_s = time.monotonic() - play_start
+                    if duration_ms and elapsed_s * 1000 > duration_ms + 3000:
+                        break
+                    if elapsed_s > 600:  # max. 10 Minuten
+                        break
+
+                    await asyncio.sleep(0.1)
+
+                is_playing[0] = False
+                await asyncio.sleep(1.0)
+                _reset_bars()
+                if _audio_known_broken():
+                    try:
+                        audio_status.value = "Audio nur im Static-Build verfügbar"
+                        audio_status.visible = True
+                        audio_status.update()
+                    except Exception:
+                        pass
+
+            def _show_audio_unavailable():
+                audio_status.value = "Audio nur im Static-Build verfügbar"
+                audio_status.visible = True
+                try:
+                    audio_status.update()
+                except Exception:
+                    pass
+
+            def trigger_play():
+                if _audio_known_broken():
+                    _show_audio_unavailable()
+                    return
+                _reset_bars()
+                is_playing[0] = True
+                page.run_task(_run_progress)
+                if play_question_audio:
+                    play_question_audio()
+
+            # Für Spieler: Playback via PubSub auslösbar machen
+            page.session.store.set("_trigger_question_audio", trigger_play)
+
+            def on_play_click(_):
+                if _audio_known_broken():
+                    _show_audio_unavailable()
+                    return
+                _reset_bars()
+                is_playing[0] = True
+                page.run_task(_run_progress)
+                if play_question_audio:
+                    play_question_audio()
+                if broadcast_question_audio:
+                    broadcast_question_audio()
+
+            # Lautstärkeregler — Wert wird in der Session gespeichert (fragenübergreifend)
+            _saved_vol = page.session.store.get("_audio_volume")
+            _current_vol = float(_saved_vol) if _saved_vol is not None else 1.0
+
+            def on_volume_change(e):
+                val = e.control.value
+                print(f"[VOL] slider on_change_end: val={val!r} (type={type(val).__name__})")
+                page.session.store.set("_audio_volume", val)
+                if set_audio_volume_fn:
+                    set_audio_volume_fn(val)
+
+            volume_row = ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.VOLUME_DOWN, size=18, opacity=0.6),
+                    ft.Slider(
+                        value=_current_vol, min=0.0, max=1.0,
+                        expand=True,
+                        on_change_end=on_volume_change,
+                    ),
+                    ft.Icon(ft.Icons.VOLUME_UP, size=18, opacity=0.6),
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                visible=flet_audio_available,
+            )
+
+            audio_controls: list[ft.Control] = [
+                prompt_text, waveform_box, time_text, audio_status, volume_row,
+            ]
+
             if role == "host":
-                # Host sees a note — actual playback needs flet build web
-                controls_list: list[ft.Control] = [prompt_text]
-                if q.asset:
-                    controls_list.append(
-                        ft.Container(
-                            padding=10,
-                            border=ft.Border.all(1, color="outline"),
-                            border_radius=8,
-                            content=ft.Row(
-                                controls=[
-                                    ft.Icon(ft.Icons.MUSIC_NOTE),
-                                    ft.Text(Path(q.asset).name, expand=True),
-                                    ft.Text("Audio (flet build web für Playback)", italic=True, opacity=0.6, size=12),
-                                ],
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                play_btn = ft.IconButton(
+                    icon=ft.Icons.PLAY_CIRCLE_FILLED_ROUNDED,
+                    icon_size=42,
+                    on_click=on_play_click,
+                )
+                audio_controls.append(
+                    ft.Row(
+                        controls=[
+                            ft.Icon(ft.Icons.MUSIC_NOTE, size=16, opacity=0.5),
+                            ft.Text(
+                                Path(q.asset).name if q.asset else "—",
+                                size=12,
+                                italic=True,
+                                opacity=0.5,
+                                expand=True,
                             ),
-                        )
+                            play_btn,
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=6,
                     )
-                return ft.Column(controls=controls_list, tight=True, spacing=8)
-            else:
-                # Players only see the prompt
-                return prompt_text
+                )
+
+            return ft.Column(controls=audio_controls, tight=True, spacing=8)
 
         if q_type == "estimate":
             controls_est: list[ft.Control] = [prompt_text]

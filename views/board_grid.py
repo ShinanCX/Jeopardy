@@ -43,7 +43,7 @@ def board_grid_view(
                     height=CELL_H,
                     alignment=ft.Alignment.CENTER,
                     padding=10,
-                    border=ft.Border.all(1, color="outline_variant"),
+                    border=ft.Border.all(2, color="primary"),
                     bgcolor="primary_container",
                     border_radius=10,
                     content=ft.Text(cat.title, weight=ft.FontWeight.BOLD, color="on_primary_container"),
