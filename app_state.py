@@ -215,11 +215,13 @@ class AppState:
             )
         return out
 
-    def snapshot(self) -> dict:
-        """Minimaler, serialisierbarer Zustand für Multiplayer-Sync."""
-        return {
+    def snapshot(self, include_board: bool = True) -> dict:
+        """Serialisierbarer Zustand für Multiplayer-Sync.
+        include_board=False sendet nur State-Deltas (kein Board) — spart Bandbreite
+        bei Events die das Board nicht verändern. Der Lobby-Store bekommt immer
+        include_board=True als Safety-Net für Reconnects."""
+        snap: dict = {
             "screen": self.screen,
-            "board": self._board_to_dict(self.board),
             "selected": self.selected,
             "max_players": self.max_players,
             "players": self._players_to_list(self.players),
@@ -231,6 +233,9 @@ class AppState:
             "buzzed_queue": list(self.buzzed_queue),
             "estimates": dict(self.estimates),
         }
+        if include_board:
+            snap["board"] = self._board_to_dict(self.board)
+        return snap
 
     def apply_snapshot(self, snap: dict) -> None:
         """Übernimmt einen Snapshot (vom Host) in den lokalen State."""

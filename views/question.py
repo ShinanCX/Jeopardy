@@ -521,7 +521,7 @@ def question_view(
         state.selected = None
         state.end_question_round()
         state.screen = "board"
-        broadcast_state()
+        broadcast_state(include_board=True)  # tile.used hat sich geändert
 
     def host_correct(_):
         if not caps.can_award_points:

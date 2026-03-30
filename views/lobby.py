@@ -25,7 +25,7 @@ def lobby_view(page: ft.Page, state: AppState, rerender, *, broadcast_state=None
         state.screen = "board"
         rerender()
         if broadcast_state:
-            broadcast_state()
+            broadcast_state(include_board=True)  # Board frisch geladen
 
     def on_resume_game(_):
         if not is_host:
@@ -33,7 +33,7 @@ def lobby_view(page: ft.Page, state: AppState, rerender, *, broadcast_state=None
         state.screen = "board"
         rerender()
         if broadcast_state:
-            broadcast_state()
+            broadcast_state(include_board=True)  # Sicherheit: Board-Stand mitschicken
 
     def go_menu(_):
         import json

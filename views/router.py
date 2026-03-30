@@ -202,20 +202,22 @@ def setup_router(page: ft.Page, state: AppState):
             _q_audio[0].volume = clamped
             _q_audio[0].update()
 
-    def broadcast_state():
+    def broadcast_state(include_board: bool = False):
         role = _get_role(page)
         if role != "host":
             return
 
         lobby_id = _get_lobby_id(page)
-        snap = state.snapshot()
-        lobby = update_lobby(lobby_id, snap)
+        # Lobby-Store bekommt immer den vollen Snapshot (Safety-Net für Reconnects)
+        full_snap = state.snapshot(include_board=True)
+        lobby = update_lobby(lobby_id, full_snap)
 
+        send_snap = full_snap if include_board else state.snapshot(include_board=False)
         msg = {
             "type": "lobby_state",
             "lobby_id": lobby_id,
             "version": lobby.version,
-            "data": lobby.data,
+            "data": send_snap,
         }
         page.pubsub.send_all(json.dumps(msg))
 
@@ -482,9 +484,10 @@ def setup_router(page: ft.Page, state: AppState):
         if msg_type in ("player_join", "player_leave") and _get_role(page) == "host":
             if msg_type == "player_join":
                 state.add_player(msg.get("player_id", ""), msg.get("name", "Spieler"))
+                broadcast_state(include_board=True)  # neuer Spieler braucht volles Board
             else:
                 state.remove_player(msg.get("player_id", ""))
-            broadcast_state()
+                broadcast_state()
 
             async def _refresh_lobby():
                 page.views.clear()
