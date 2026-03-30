@@ -158,13 +158,11 @@ def setup_router(page: ft.Page, state: AppState):
             # Lautstärke direkt vor play() setzen: Flutter kennt das Control bereits,
             # da page.update() bei der Fragenanzeige schon gelaufen ist.
             saved_vol = page.session.store.get("_audio_volume")
-            print(f"[VOL] _do_play: saved_vol={saved_vol!r}")
             if saved_vol is not None:
                 fa.volume = float(saved_vol)
                 fa.update()
             try:
-                await asyncio.wait_for(fa.play(), timeout=3.0)
-                # _flet_audio_works wird via on_duration_change gesetzt; hier nur Fallback
+                await fa.play()
                 if _flet_audio_works[0] is None:
                     _flet_audio_works[0] = True
             except Exception:
