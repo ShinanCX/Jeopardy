@@ -223,6 +223,7 @@ def setup_router(page: ft.Page, state: AppState):
         push_route(page, _route_for_screen(page, state.screen))
 
     def _build_screen_control() -> ft.Control:
+        page.on_keyboard_event = None  # Cleanup bei jedem Screen-Wechsel
         role = _get_role(page)
         caps = compute_capabilities(state, role)
 
