@@ -11,12 +11,13 @@ class Player:
     is_turn: bool = False
     player_id: str = ""
 
+@dataclass
 class Capabilities:
     """UI/Action permissions derived from role + current game state."""
-    can_pick_tile: bool = False  # Board tiles clickable (host only)
-    can_select_turn: bool = False # aktiven Spieler wechseln
-    can_award_points: bool = False # Richtig/Falsch, Punkte
-    can_go_to_lobby: bool = False # Zur-Lobby-Button sichtbar/nutzbar
+    can_pick_tile: bool = False
+    can_select_turn: bool = False
+    can_award_points: bool = False
+    can_go_to_lobby: bool = False
 
 
 def compute_capabilities(state: "AppState", role: str) -> Capabilities:
