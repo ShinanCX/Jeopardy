@@ -6,19 +6,28 @@ def topbar_view(
     on_back=None,
     back_label: str = "Zur Lobby",
     right_control: ft.Control | None = None,
+    left_extra: ft.Control | None = None,
 ) -> ft.Control:
     """
     Topbar mit:
-    - optionalem Zurück-Button links
+    - optionalem Zurück-Button links (+ optionalem left_extra daneben)
     - zentriertem Titel (global zentriert)
     - optionalem rechten Control (Timer, Host-Info, ...)
     """
 
-    left = (
-        ft.OutlinedButton(back_label, on_click=on_back)
-        if on_back
-        else ft.Container(width=120)
-    )
+    if on_back:
+        back_btn = ft.OutlinedButton(back_label, on_click=on_back)
+        if left_extra is not None:
+            left = ft.Row(
+                controls=[back_btn, left_extra],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                tight=True,
+            )
+        else:
+            left = back_btn
+    else:
+        left = left_extra if left_extra is not None else ft.Container(width=120)
 
     center = ft.Container(
         alignment=ft.Alignment.CENTER,
