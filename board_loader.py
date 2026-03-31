@@ -48,21 +48,24 @@ def load_board(board_id: str) -> Board:
         tiles = []
         for tile_data in cat_data.get("tiles", []):
             q = tile_data.get("question", {})
-            asset = q.get("asset")
-            if asset:
-                # Pfad auf BOARDS_DIR beschränken (kein Path Traversal)
-                resolved = (board_dir / asset).resolve()
-                if resolved.is_relative_to(BOARDS_DIR.resolve()):
-                    asset = str(resolved)
-                else:
-                    asset = None
+            # Backward compat: support both "assets" (list) and legacy "asset" (single)
+            raw_assets = q.get("assets")
+            if raw_assets is None:
+                old = q.get("asset")
+                raw_assets = [old] if old else []
+            resolved_assets = []
+            for asset in raw_assets:
+                if asset:
+                    resolved = (board_dir / asset).resolve()
+                    if resolved.is_relative_to(BOARDS_DIR.resolve()):
+                        resolved_assets.append(str(resolved))
             tiles.append(Tile(
                 value=int(tile_data.get("value", 0)),
                 question=Question(
                     type=str(q.get("type", "text")),
                     prompt=str(q.get("prompt", "")),
                     answer=str(q.get("answer", "")),
-                    asset=asset,
+                    assets=resolved_assets,
                 ),
             ))
         categories.append(Category(
