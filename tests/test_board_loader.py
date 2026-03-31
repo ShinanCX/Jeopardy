@@ -72,14 +72,14 @@ class TestLoadBoard:
 
     def test_resolves_asset_to_absolute_path(self, loader, boards_dir):
         board = loader.load_board("testboard")
-        asset = board.categories[0].tiles[1].question.asset
-        assert asset is not None
-        assert Path(asset).is_absolute()
-        assert Path(asset).exists()
+        assets = board.categories[0].tiles[1].question.assets
+        assert len(assets) == 1
+        assert Path(assets[0]).is_absolute()
+        assert Path(assets[0]).exists()
 
-    def test_null_asset_stays_none(self, loader):
+    def test_null_asset_stays_empty_list(self, loader):
         board = loader.load_board("testboard")
-        assert board.categories[0].tiles[0].question.asset is None
+        assert board.categories[0].tiles[0].question.assets == []
 
     def test_raises_for_missing_directory(self, loader):
         with pytest.raises(ValueError, match="nicht gefunden"):
@@ -123,8 +123,8 @@ class TestLoadBoard:
         (hack_dir / "board.json").write_text(json.dumps(data), encoding="utf-8")
 
         board = loader.load_board("hackboard")
-        # Asset muss None sein, da es außerhalb von BOARDS_DIR liegt
-        assert board.categories[0].tiles[0].question.asset is None
+        # Asset muss gefiltert werden, da es außerhalb von BOARDS_DIR liegt
+        assert board.categories[0].tiles[0].question.assets == []
 
 
 class TestListBoards:
