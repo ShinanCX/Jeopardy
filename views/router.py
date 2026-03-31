@@ -534,12 +534,16 @@ def setup_router(page: ft.Page, state: AppState):
                     page.run_task(_refresh_question)
             return
 
-        if msg_type == "player_estimate" and _get_role(page) == "host":
+        if msg_type == "player_estimate_lock" and _get_role(page) == "host":
             player_id = msg.get("player_id", "")
             answer = msg.get("answer", "")
-            state.estimates[player_id] = answer
+            if player_id:
+                state.estimates[player_id] = answer
+                if player_id not in state.estimates_locked:
+                    state.estimates_locked.append(player_id)
+            broadcast_state()
 
-            async def _refresh_estimates():
+            async def _refresh_lock():
                 page.views.clear()
                 page.views.append(
                     ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
@@ -548,7 +552,7 @@ def setup_router(page: ft.Page, state: AppState):
                 page.update()
 
             if page.session and page.session.connection:
-                page.run_task(_refresh_estimates)
+                page.run_task(_refresh_lock)
             return
 
         if msg_type != "lobby_state":
