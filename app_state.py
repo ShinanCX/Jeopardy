@@ -48,7 +48,10 @@ class AppState:
     question_answer_revealed: bool = False
     buzzer_open: bool = False  # sind Buzzers offen?
     buzzed_queue: list[int] = field(default_factory=list)
-    estimates: dict = field(default_factory=dict)  # {player_id: answer} für Schätzfragen
+    estimates: dict = field(default_factory=dict)          # {player_id: answer}
+    estimates_locked: list = field(default_factory=list)   # player_ids die eingeloggt haben
+    estimates_revealed: list = field(default_factory=list) # player_ids deren Antwort aufgedeckt ist
+    question_asset_index: int = 0  # welches Asset aktuell angezeigt wird
 
     def remove_player(self, player_id: str):
         """Entfernt einen Spieler anhand seiner player_id."""
@@ -122,6 +125,9 @@ class AppState:
         self.buzzer_open = False
         self.buzzed_queue = []
         self.estimates = {}
+        self.estimates_locked = []
+        self.estimates_revealed = []
+        self.question_asset_index = 0
 
     def open_buzzer(self):
         """Host öffnet Buzzers für alle außer dem aktuellen Answerer."""
@@ -159,7 +165,7 @@ class AppState:
                                 "type": t.question.type,
                                 "prompt": t.question.prompt,
                                 "answer": t.question.answer,
-                                "asset": t.question.asset,
+                                "assets": t.question.assets,
                             },
                         }
                         for t in c.tiles
@@ -188,7 +194,7 @@ class AppState:
                             type=str(q.get("type", "text")),
                             prompt=str(q.get("prompt", "")),
                             answer=str(q.get("answer", "")),
-                            asset=q.get("asset"),
+                            assets=list(q.get("assets", [])),
                         ),
                     )
                 )
@@ -232,6 +238,9 @@ class AppState:
             "buzzer_open": self.buzzer_open,
             "buzzed_queue": list(self.buzzed_queue),
             "estimates": dict(self.estimates),
+            "estimates_locked": list(self.estimates_locked),
+            "estimates_revealed": list(self.estimates_revealed),
+            "question_asset_index": self.question_asset_index,
         }
         if include_board:
             snap["board"] = self._board_to_dict(self.board)
@@ -292,3 +301,15 @@ class AppState:
 
         if "estimates" in snap and isinstance(snap["estimates"], dict):
             self.estimates = snap["estimates"]
+
+        if "estimates_locked" in snap and snap["estimates_locked"] is not None:
+            self.estimates_locked = list(snap["estimates_locked"])
+
+        if "estimates_revealed" in snap and snap["estimates_revealed"] is not None:
+            self.estimates_revealed = list(snap["estimates_revealed"])
+
+        if "question_asset_index" in snap and snap["question_asset_index"] is not None:
+            try:
+                self.question_asset_index = int(snap["question_asset_index"])
+            except Exception:
+                self.question_asset_index = 0

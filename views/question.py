@@ -29,6 +29,7 @@ def question_view(
     get_audio_duration_fn=None,
     get_audio_position_fn=None,
     set_audio_volume_fn=None,
+    rebuild_view=None,
 ) -> ft.Control:
     # Guard rails
     if state.board is None or state.selected is None:
@@ -169,55 +170,125 @@ def question_view(
         )
 
     # -------------------------------------------------------------------------
-    # Estimate: live input for player
+    # Estimate: input with lock-in for player
     # -------------------------------------------------------------------------
     def _build_estimate_input() -> ft.Control:
-        """Text field that sends on_change to host via PubSub."""
         my_player_id = page.session.store.get("player_id") or ""
         lobby_id = page.session.store.get("lobby_id") or ""
+        is_locked = my_player_id in state.estimates_locked
         existing = state.estimates.get(my_player_id, "")
 
         est_field = ft.TextField(
             label="Deine Schätzung",
             value=existing,
             expand=True,
-            autofocus=True,
+            autofocus=not is_locked,
+            read_only=is_locked,
         )
 
         def on_estimate_change(e):
-            msg = json.dumps({
+            if is_locked:
+                return
+            page.pubsub.send_all(json.dumps({
                 "type": "player_estimate",
                 "lobby_id": lobby_id,
                 "player_id": my_player_id,
                 "answer": e.data,
-            })
-            page.pubsub.send_all(msg)
+            }))
 
         est_field.on_change = on_estimate_change
-        return ft.Column(
-            controls=[
-                ft.Text("Gib deine Schätzung ein:", size=15),
-                ft.Row(controls=[est_field]),
-            ],
-            tight=True,
-            spacing=8,
-        )
+
+        def lock_in(_):
+            answer = est_field.value.strip()
+            if not answer:
+                return
+            page.pubsub.send_all(json.dumps({
+                "type": "player_estimate_lock",
+                "lobby_id": lobby_id,
+                "player_id": my_player_id,
+                "answer": answer,
+            }))
+
+        controls = [
+            ft.Text("Gib deine Schätzung ein:", size=15),
+            ft.Row(controls=[est_field]),
+        ]
+        if is_locked:
+            controls.append(ft.Row(controls=[
+                ft.Icon(ft.Icons.LOCK, size=16, color="tertiary"),
+                ft.Text("Antwort eingeloggt – warte auf den Host.", color="tertiary"),
+            ]))
+        else:
+            controls.append(ft.Row(controls=[
+                ft.FilledButton("Einloggen", icon=ft.Icons.LOCK_OUTLINED, on_click=lock_in),
+            ]))
+        return ft.Column(controls=controls, tight=True, spacing=8)
 
     # -------------------------------------------------------------------------
-    # Estimate: host sees live answers
+    # Estimate: host sees answers with lock/reveal controls
     # -------------------------------------------------------------------------
     def refresh_estimates_display():
         rows = []
         for p in state.players:
             answer = state.estimates.get(p.player_id, "")
-            rows.append(
-                ft.Row(
-                    controls=[
-                        ft.Text(p.name, weight=ft.FontWeight.BOLD, width=140),
-                        ft.Text(answer if answer else "—", italic=not answer, opacity=0.6 if not answer else 1.0),
-                    ],
-                )
+            is_locked = p.player_id in state.estimates_locked
+            is_revealed = p.player_id in state.estimates_revealed
+
+            lock_icon = ft.Icon(
+                ft.Icons.LOCK if is_locked else ft.Icons.LOCK_OPEN,
+                size=16,
+                color="tertiary" if is_locked else "outline",
+                tooltip="Eingeloggt" if is_locked else "Noch offen",
             )
+            answer_text = ft.Text(
+                answer if answer else "—",
+                expand=True,
+                italic=not is_locked,
+                opacity=1.0 if is_locked else 0.7,
+            )
+
+            def make_reveal_btn(pid, locked, revealed):
+                def reveal(_):
+                    if pid not in state.estimates_revealed:
+                        state.estimates_revealed.append(pid)
+                    broadcast_state()
+                    refresh_estimates_display()
+                    estimates_column.update()
+                return ft.TextButton(
+                    "Aufdecken",
+                    on_click=reveal,
+                    disabled=not locked or revealed,
+                )
+
+            def make_unlock_btn(pid, locked):
+                def unlock(_):
+                    if pid in state.estimates_locked:
+                        state.estimates_locked.remove(pid)
+                    if pid in state.estimates_revealed:
+                        state.estimates_revealed.remove(pid)
+                    if pid in state.estimates:
+                        del state.estimates[pid]
+                    broadcast_state()
+                    refresh_estimates_display()
+                    estimates_column.update()
+                return ft.IconButton(
+                    ft.Icons.LOCK_OPEN,
+                    tooltip="Entsperren",
+                    on_click=unlock,
+                    icon_size=16,
+                    visible=locked,
+                )
+
+            rows.append(ft.Row(
+                controls=[
+                    lock_icon,
+                    ft.Text(p.name, weight=ft.FontWeight.BOLD, width=120),
+                    answer_text,
+                    make_reveal_btn(p.player_id, is_locked, is_revealed),
+                    make_unlock_btn(p.player_id, is_locked),
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ))
         estimates_column.controls = rows
 
     # -------------------------------------------------------------------------
@@ -226,15 +297,48 @@ def question_view(
     def _build_prompt_area() -> ft.Control:
         prompt_text = ft.Text(q.prompt, size=22)
 
+        # Asset-Index absichern
+        asset_idx = max(0, min(state.question_asset_index, len(q.assets) - 1)) if q.assets else 0
+        current_asset = q.assets[asset_idx] if q.assets else None
+        n_assets = len(q.assets)
+
+        def _nav_prev(_):
+            if state.question_asset_index > 0:
+                state.question_asset_index -= 1
+                broadcast_state()
+                if rebuild_view:
+                    rebuild_view()
+
+        def _nav_next(_):
+            if state.question_asset_index < n_assets - 1:
+                state.question_asset_index += 1
+                broadcast_state()
+                if rebuild_view:
+                    rebuild_view()
+
+        def _nav_row() -> ft.Control:
+            return ft.Row(
+                controls=[
+                    ft.IconButton(ft.Icons.ARROW_BACK_IOS_ROUNDED, on_click=_nav_prev,
+                                  disabled=asset_idx == 0, icon_size=20),
+                    ft.Text(f"{asset_idx + 1} / {n_assets}", size=13, opacity=0.7),
+                    ft.IconButton(ft.Icons.ARROW_FORWARD_IOS_ROUNDED, on_click=_nav_next,
+                                  disabled=asset_idx == n_assets - 1, icon_size=20),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=4,
+            )
+
         if q_type == "text":
             return prompt_text
 
         if q_type == "image":
             controls: list[ft.Control] = [prompt_text]
-            if q.asset:
+            if current_asset:
                 try:
                     from board_loader import BOARDS_DIR
-                    rel = Path(q.asset).relative_to(BOARDS_DIR)
+                    rel = Path(current_asset).relative_to(BOARDS_DIR)
                     src = f"/boards/{rel.as_posix()}"
 
                     def _open_zoom(_e, _src=src):
@@ -258,17 +362,19 @@ def question_view(
                         )
                     )
                 except Exception as _img_err:
-                    print(f"[Image] Fehler beim Laden: {_img_err!r}  path={q.asset!r}")
-                    controls.append(ft.Text(f"Bild nicht gefunden: {q.asset}", color="error", italic=True))
+                    print(f"[Image] Fehler beim Laden: {_img_err!r}  path={current_asset!r}")
+                    controls.append(ft.Text(f"Bild nicht gefunden: {current_asset}", color="error", italic=True))
+            if role == "host" and n_assets > 1:
+                controls.append(_nav_row())
             return ft.Column(controls=controls, tight=True, spacing=8)
 
         if q_type == "audio":
             # Audio-URL aus absolutem Pfad berechnen
             audio_src = None
-            if q.asset:
+            if current_asset:
                 try:
                     from board_loader import BOARDS_DIR
-                    rel = Path(q.asset).relative_to(BOARDS_DIR)
+                    rel = Path(current_asset).relative_to(BOARDS_DIR)
                     audio_src = f"/boards/{rel.as_posix()}"
                 except Exception:
                     pass
@@ -277,7 +383,7 @@ def question_view(
                 set_question_audio_src(audio_src)
 
             # Waveform-Balken: Höhen aus Dateinamen-Hash, Farbe = Fortschritt
-            _seed = Path(q.asset).name if q.asset else "default"
+            _seed = Path(current_asset).name if current_asset else "default"
             _h = hashlib.md5(_seed.encode()).digest()
             base_heights = [8 + (_h[i % len(_h)] % 44) for i in range(24)]
             is_playing = [False]
@@ -474,7 +580,7 @@ def question_view(
                         controls=[
                             ft.Icon(ft.Icons.MUSIC_NOTE, size=16, opacity=0.5),
                             ft.Text(
-                                Path(q.asset).name if q.asset else "—",
+                                Path(current_asset).name if current_asset else "—",
                                 size=12,
                                 italic=True,
                                 opacity=0.5,
@@ -486,6 +592,8 @@ def question_view(
                         spacing=6,
                     )
                 )
+                if n_assets > 1:
+                    audio_controls.append(_nav_row())
 
             return ft.Column(controls=audio_controls, tight=True, spacing=8)
 
@@ -494,6 +602,20 @@ def question_view(
             if role == "player":
                 controls_est.append(ft.Container(height=8))
                 controls_est.append(_build_estimate_input())
+                # Aufgedeckte Antworten anzeigen
+                revealed = [
+                    p for p in state.players
+                    if p.player_id in state.estimates_revealed
+                ]
+                if revealed:
+                    controls_est.append(ft.Divider())
+                    controls_est.append(ft.Text("Aufgedeckte Antworten:", size=13, weight=ft.FontWeight.BOLD))
+                    for p in revealed:
+                        answer = state.estimates.get(p.player_id, "—")
+                        controls_est.append(ft.Row(controls=[
+                            ft.Text(p.name, weight=ft.FontWeight.BOLD, width=140),
+                            ft.Text(answer),
+                        ]))
             return ft.Column(controls=controls_est, tight=True, spacing=8)
 
         return prompt_text  # fallback
@@ -556,16 +678,25 @@ def question_view(
     # Host controls row
     # -------------------------------------------------------------------------
     if q_type == "estimate":
-        # For estimate: no correct/wrong per-player; host reveals all, then picks winner
-        def reveal_all(_):
+        # For estimate: no correct/wrong per-player; host reveals estimates, then correct answer
+        def reveal_correct_answer(_):
             state.question_answer_revealed = True
             refresh_answer()
             answer_container.update()
             broadcast_state()
 
+        def reveal_all_estimates(_):
+            for p in state.players:
+                if p.player_id in state.estimates_locked and p.player_id not in state.estimates_revealed:
+                    state.estimates_revealed.append(p.player_id)
+            broadcast_state()
+            refresh_estimates_display()
+            estimates_column.update()
+
         host_action_row = ft.Row(
             controls=[
-                ft.OutlinedButton("Antwort zeigen", on_click=reveal_all),
+                ft.FilledTonalButton("Alle aufdecken", icon=ft.Icons.VISIBILITY, on_click=reveal_all_estimates),
+                ft.OutlinedButton("Antwort zeigen", on_click=reveal_correct_answer),
                 ft.TextButton("Zurück (ohne verbrauchen)", on_click=back_without_use),
             ],
             wrap=True,
@@ -577,7 +708,7 @@ def question_view(
 
             btn = ft.OutlinedButton(f"🏆 {p.name} gewinnt")
 
-            def award(_b=btn, _pi=player_index):
+            def award(e, _b=btn, _pi=player_index):
                 _b.disabled = True
                 _b.update()
                 state.players[_pi].score += tile.value

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 
@@ -7,7 +7,7 @@ class Question:
     prompt: str
     answer: str
     type: str = "text"
-    asset: str | None = None
+    assets: list[str] = field(default_factory=list)
 
 
 @dataclass

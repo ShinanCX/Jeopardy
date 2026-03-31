@@ -31,12 +31,12 @@ MAX_Q = 10
 # ---------------------------------------------------------------------------
 
 class _QData:
-    def __init__(self, type_="text", value=100, prompt="", answer="", asset=""):
+    def __init__(self, type_="text", value=100, prompt="", answer="", assets=None):
         self.type_ = type_
         self.value = value
         self.prompt = prompt
         self.answer = answer
-        self.asset = asset
+        self.assets: list[str] = list(assets) if assets else []
 
 
 class _CatData:
@@ -60,12 +60,16 @@ def _load_into_editor(board_id: str) -> tuple[str, list[_CatData], int, int]:
         qs = []
         for t in c.get("tiles", []):
             q = t.get("question", {})
+            raw_assets = q.get("assets")
+            if raw_assets is None:
+                old = q.get("asset")
+                raw_assets = [old] if old else []
             qs.append(_QData(
                 type_=q.get("type", "text"),
                 value=int(t.get("value", 100)),
                 prompt=q.get("prompt", ""),
                 answer=q.get("answer", ""),
-                asset=q.get("asset", "") or "",
+                assets=[a for a in raw_assets if a],
             ))
         cats.append(_CatData(title=c.get("title", ""), questions=qs))
 
@@ -93,7 +97,7 @@ def _create_board_skeleton(board_id: str, title: str, num_cats: int, num_q: int)
                 "tiles": [
                     {
                         "value": DEFAULT_VALUES[q_i] if q_i < len(DEFAULT_VALUES) else (q_i + 1) * 100,
-                        "question": {"type": "text", "prompt": "", "answer": "", "asset": None},
+                        "question": {"type": "text", "prompt": "", "answer": "", "assets": []},
                     }
                     for q_i in range(num_q)
                 ],
@@ -131,7 +135,7 @@ def _save_board(board_id: str, title: str, cats: list[_CatData], num_cats_target
                             "type": q.type_,
                             "prompt": q.prompt,
                             "answer": q.answer,
-                            "asset": q.asset or None,
+                            "assets": q.assets,
                         },
                     }
                     for q in c.questions
@@ -271,7 +275,6 @@ def board_editor_view(
     _mounted = [False]
     # Dropdown-Referenzen für zuverlässiges Auslesen beim Speichern
     _type_dropdowns: dict[tuple[int, int], ft.Dropdown] = {}
-    _asset_tfs: dict[tuple[int, int], ft.TextField] = {}
 
     board_dir = BOARDS_DIR / board_id
     _file_picker = ft.FilePicker()
@@ -280,7 +283,6 @@ def board_editor_view(
 
     def rebuild():
         _type_dropdowns.clear()
-        _asset_tfs.clear()
         cats_column.controls = [_cat_card(i) for i in range(len(cats))]
         if _mounted[0]:
             cats_column.update()
@@ -298,8 +300,8 @@ def board_editor_view(
 
         def on_type_change(e):
             val = type_dd.value or "text"
-            asset_row.visible = val in ("image", "audio")
-            asset_row.update()
+            asset_section.visible = val in ("image", "audio")
+            asset_section.update()
 
         type_dd.on_select = on_type_change
 
@@ -324,15 +326,36 @@ def board_editor_view(
             expand=True,
             on_change=lambda e: setattr(q, "answer", e.data),
         )
-        asset_tf = ft.TextField(
-            label="Asset-Pfad",
-            value=q.asset,
-            expand=True,
-            hint_text="Relativ zum Board-Verzeichnis (images/... oder sounds/...)",
-        )
-        _asset_tfs[(cat_i, q_i)] = asset_tf
 
-        def pick_asset(_e, _tf=asset_tf):
+        # --- Dynamische Asset-Liste ---
+        assets_col = ft.Column(spacing=2, tight=True)
+
+        def _rebuild_assets_col():
+            rows = []
+            for i, a in enumerate(q.assets):
+                def make_rm(idx):
+                    def rm(_):
+                        if 0 <= idx < len(q.assets):
+                            q.assets.pop(idx)
+                        _rebuild_assets_col()
+                        try:
+                            assets_col.update()
+                        except Exception:
+                            pass
+                    return rm
+                rows.append(ft.Row(
+                    controls=[
+                        ft.Icon(ft.Icons.ATTACH_FILE, size=14, opacity=0.6),
+                        ft.Text(a, size=12, expand=True, overflow=ft.TextOverflow.ELLIPSIS),
+                        ft.IconButton(ft.Icons.CLOSE, icon_size=14, on_click=make_rm(i), tooltip="Entfernen"),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ))
+            assets_col.controls = rows
+
+        _rebuild_assets_col()
+
+        def pick_asset(_e):
             async def _do():
                 try:
                     current_type = type_dd.value or "image"
@@ -343,7 +366,6 @@ def board_editor_view(
                     if not files:
                         return
                     picked = files[0]
-                    # Dateinamen sanitizen: nur den letzten Pfadteil verwenden
                     safe_name = Path(picked.name).name
                     if not safe_name:
                         return
@@ -356,29 +378,32 @@ def board_editor_view(
                     elif picked.path:
                         shutil.copy2(picked.path, dest)
                     else:
-                        _tf.error_text = "Keine Dateidaten erhalten"
-                        _tf.update()
                         return
-                    _tf.error_text = None
-                    _tf.value = f"{sub_dir}/{safe_name}"
-                    _tf.update()
+                    q.assets.append(f"{sub_dir}/{safe_name}")
+                    _rebuild_assets_col()
+                    try:
+                        assets_col.update()
+                    except Exception:
+                        pass
                 except Exception as ex:
                     print(f"[FilePicker] Fehler: {ex}")
-                    _tf.error_text = f"Fehler: {ex}"
-                    _tf.update()
             page.run_task(_do)
 
-        asset_row = ft.Row(
+        asset_section = ft.Column(
             controls=[
-                asset_tf,
-                ft.IconButton(
-                    ft.Icons.FOLDER_OPEN_OUTLINED,
-                    tooltip="Datei auswählen & kopieren",
-                    on_click=pick_asset,
+                ft.Row(
+                    controls=[
+                        ft.Text("Assets:", size=13, opacity=0.7),
+                        ft.TextButton("Hinzufügen", icon=ft.Icons.ADD, on_click=pick_asset),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
                 ),
+                assets_col,
             ],
+            tight=True,
+            spacing=2,
             visible=q.type_ in ("image", "audio"),
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
         return ft.Container(
@@ -393,7 +418,7 @@ def board_editor_view(
                     ),
                     ft.Row(controls=[prompt_tf]),
                     ft.Row(controls=[answer_tf]),
-                    asset_row,
+                    asset_section,
                 ],
                 tight=True,
                 spacing=6,
@@ -428,11 +453,10 @@ def board_editor_view(
         )
 
     def save(_):
-        # Werte zuverlässig aus den Controls lesen (on_change/e.data in Flet 0.83 unzuverlässig)
+        # Typen zuverlässig aus Dropdowns lesen (on_select in Flet 0.83 manchmal unzuverlässig)
         for (ci, qi), dd in _type_dropdowns.items():
             cats[ci].questions[qi].type_ = dd.value or "text"
-        for (ci, qi), tf in _asset_tfs.items():
-            cats[ci].questions[qi].asset = tf.value or ""
+        # Assets werden direkt in q.assets verwaltet (kein Textfeld mehr nötig)
 
         title = title_field.value.strip()
         if not title:
