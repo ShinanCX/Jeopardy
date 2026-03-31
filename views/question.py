@@ -705,7 +705,7 @@ def question_view(
 
             btn = ft.OutlinedButton(f"🏆 {p.name} gewinnt")
 
-            def award(_b=btn, _pi=player_index):
+            def award(e, _b=btn, _pi=player_index):
                 _b.disabled = True
                 _b.update()
                 state.players[_pi].score += tile.value
