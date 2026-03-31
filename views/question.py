@@ -240,10 +240,10 @@ def question_view(
                 tooltip="Eingeloggt" if is_locked else "Noch offen",
             )
             answer_text = ft.Text(
-                answer if is_locked else "…",
+                answer if answer else "—",
                 expand=True,
                 italic=not is_locked,
-                opacity=1.0 if is_locked else 0.4,
+                opacity=1.0 if is_locked else 0.7,
             )
 
             def make_reveal_btn(pid, locked, revealed):
