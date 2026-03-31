@@ -77,8 +77,8 @@ def board_view(page: ft.Page, state: AppState, rerender, broadcast_state, caps: 
             topbar,
             ft.Container(height=10),
             board_host,              # fix height -> kein vertikales expand
-            ft.Container(height=10),
-            player_host,             # expand=1 -> nimmt Resthöhe
+            ft.Container(expand=True),  # nimmt Resthöhe -> schiebt player_host nach unten
+            player_host,             # fix height -> 16:9 Karten
         ],
         expand=True,
         spacing=0,

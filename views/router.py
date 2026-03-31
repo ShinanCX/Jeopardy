@@ -82,7 +82,7 @@ def setup_router(page: ft.Page, state: AppState):
         _flet_audio_available[0] = True
         for name, filename in _sound_files.items():
             if (_assets_dir / filename).exists():
-                audio = _flet_audio_cls(src=filename, autoplay=False, release_mode=_release_mode_stop)
+                audio = _flet_audio_cls(src=f"assets/{filename}", autoplay=False, release_mode=_release_mode_stop)
                 page.services.append(audio)
                 _sounds[name] = audio
         if _sounds:

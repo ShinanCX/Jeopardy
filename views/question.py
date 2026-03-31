@@ -10,6 +10,8 @@ from pathlib import Path
 import flet as ft
 
 from app_state import AppState, Capabilities, compute_capabilities
+from ui.layout import LAYOUT
+from views.components.player_card import PlayerCard
 from views.topbar import topbar_view
 
 
@@ -55,19 +57,10 @@ def question_view(
             broadcast_sound(name)
 
     # -------------------------------------------------------------------------
-    # Shared UI refs
-    # -------------------------------------------------------------------------
-    answer_container = ft.Container()
-    answerer_name_text = ft.Text("")
-    buzzer_state_text = ft.Text("", opacity=0.8)
-    correct_btn = ft.Button(content="✅ Richtig", on_click=lambda _: None)
-    wrong_btn = ft.Button(content="❌ Falsch", on_click=lambda _: None)
-    buzzer_holder = ft.Container()
-    estimates_column = ft.Column(spacing=6, tight=True)  # host-only, estimate mode
-
-    # -------------------------------------------------------------------------
     # Answer section
     # -------------------------------------------------------------------------
+    answer_container = ft.Container()
+
     def refresh_answer():
         if role == "host":
             if state.question_answer_revealed:
@@ -105,69 +98,67 @@ def question_view(
             )
 
     # -------------------------------------------------------------------------
-    # Status strip (not shown for estimate questions)
+    # Action handlers
     # -------------------------------------------------------------------------
-    def refresh_status():
-        state.ensure_players()
-        idx = max(0, min(state.question_answerer_index, len(state.players) - 1))
-        state.question_answerer_index = idx
-        a = state.players[idx]
-        answerer_name_text.value = a.name
-        buzzer_state_text.value = "• Buzzers offen" if state.buzzer_open else "• Nur Turn-Owner"
-        if caps.can_award_points:
-            correct_btn.content = f"✅ Richtig ({a.name})"
-            wrong_btn.content = f"❌ Falsch ({a.name})"
+    def reveal(_):
+        state.question_answer_revealed = True
+        refresh_answer()
+        answer_container.update()
+        broadcast_state()
+
+    def back_without_use(_):
+        page.on_keyboard_event = None
+        state.selected = None
+        state.end_question_round()
+        state.screen = "board"
+        rerender()
+        broadcast_state()
+
+    def finish_round_and_back():
+        page.on_keyboard_event = None
+        tile.used = True
+        state.selected = None
+        state.end_question_round()
+        state.screen = "board"
+        broadcast_state(include_board=True)
+
+    correct_btn = ft.FilledButton("✅ Richtig", on_click=lambda _: None)
+    wrong_btn = ft.OutlinedButton("❌ Falsch", on_click=lambda _: None)
+
+    def host_correct(_):
+        if not caps.can_award_points:
+            return
+        a = state.players[state.question_answerer_index]
+        a.score += tile.value
+        _play("correct_answer")
+        state.advance_turn()
+        finish_round_and_back()
+        rerender()
+
+    def host_wrong(_):
+        if not caps.can_award_points:
+            return
+        a = state.players[state.question_answerer_index]
+        a.score -= tile.value
+        _play("wrong_answer")
+        state.open_buzzer()
+        broadcast_state()
+        if rebuild_view:
+            rebuild_view()
+
+    correct_btn.on_click = host_correct
+    wrong_btn.on_click = host_wrong
 
     # -------------------------------------------------------------------------
-    # Buzzer (not shown for estimate questions)
+    # Estimate actions
     # -------------------------------------------------------------------------
-    def refresh_buzzer_controls():
-        if q_type == "estimate":
-            buzzer_holder.content = ft.Container()
-            page.on_keyboard_event = None
-            return
-
-        if role != "player":
-            buzzer_holder.content = ft.Container()
-            return
-
-        if not state.buzzer_open:
-            page.on_keyboard_event = None
-            buzzer_holder.content = ft.Container()
-            return
-
-        my_player_id = page.session.store.get("player_id") or ""
-        my_index = next((i for i, p in enumerate(state.players) if p.player_id == my_player_id), -1)
-
-        if my_index == state.question_answerer_index:
-            page.on_keyboard_event = None
-            buzzer_holder.content = ft.Container()
-            return
-
-        buzz_btn = ft.FilledButton("Buzz!  [Space]", width=200)
-
-        def send_buzz(_=None):
-            buzz_btn.disabled = True
-            buzz_btn.update()
-            lobby_id = page.session.store.get("lobby_id") or ""
-            player_id = page.session.store.get("player_id") or ""
-            msg = json.dumps({"type": "player_buzz", "lobby_id": lobby_id, "player_id": player_id})
-            _play("buzz")
-            page.pubsub.send_all(msg)
-            page.on_keyboard_event = None
-
-        buzz_btn.on_click = send_buzz
-
-        def on_key(e: ft.KeyboardEvent):
-            if e.key == " ":
-                send_buzz()
-
-        page.on_keyboard_event = on_key
-        buzzer_holder.content = ft.Container(
-            padding=16,
-            alignment=ft.Alignment.CENTER,
-            content=buzz_btn,
-        )
+    def reveal_all_estimates(_):
+        for p in state.players:
+            if p.player_id in state.estimates_locked and p.player_id not in state.estimates_revealed:
+                state.estimates_revealed.append(p.player_id)
+        broadcast_state()
+        if rebuild_view:
+            rebuild_view()
 
     # -------------------------------------------------------------------------
     # Estimate: input with lock-in for player
@@ -209,98 +200,26 @@ def question_view(
                 "answer": answer,
             }))
 
-        controls = [
-            ft.Text("Gib deine Schätzung ein:", size=15),
-            ft.Row(controls=[est_field]),
-        ]
+        controls = [ft.Row(controls=[est_field])]
         if is_locked:
             controls.append(ft.Row(controls=[
-                ft.Icon(ft.Icons.LOCK, size=16, color="tertiary"),
-                ft.Text("Antwort eingeloggt – warte auf den Host.", color="tertiary"),
+                ft.Icon(ft.Icons.LOCK, size=14, color="tertiary"),
+                ft.Text("Eingeloggt", size=12, color="tertiary"),
             ]))
         else:
             controls.append(ft.Row(controls=[
                 ft.FilledButton("Einloggen", icon=ft.Icons.LOCK_OUTLINED, on_click=lock_in),
             ]))
-        return ft.Column(controls=controls, tight=True, spacing=8)
+        return ft.Column(controls=controls, tight=True, spacing=6)
 
     # -------------------------------------------------------------------------
-    # Estimate: host sees answers with lock/reveal controls
+    # Asset navigation (shared between topbar and prompt area)
     # -------------------------------------------------------------------------
-    def refresh_estimates_display():
-        rows = []
-        for p in state.players:
-            answer = state.estimates.get(p.player_id, "")
-            is_locked = p.player_id in state.estimates_locked
-            is_revealed = p.player_id in state.estimates_revealed
-
-            lock_icon = ft.Icon(
-                ft.Icons.LOCK if is_locked else ft.Icons.LOCK_OPEN,
-                size=16,
-                color="tertiary" if is_locked else "outline",
-                tooltip="Eingeloggt" if is_locked else "Noch offen",
-            )
-            answer_text = ft.Text(
-                answer if answer else "—",
-                expand=True,
-                italic=not is_locked,
-                opacity=1.0 if is_locked else 0.7,
-            )
-
-            def make_reveal_btn(pid, locked, revealed):
-                def reveal(_):
-                    if pid not in state.estimates_revealed:
-                        state.estimates_revealed.append(pid)
-                    broadcast_state()
-                    refresh_estimates_display()
-                    estimates_column.update()
-                return ft.TextButton(
-                    "Aufdecken",
-                    on_click=reveal,
-                    disabled=not locked or revealed,
-                )
-
-            def make_unlock_btn(pid, locked):
-                def unlock(_):
-                    if pid in state.estimates_locked:
-                        state.estimates_locked.remove(pid)
-                    if pid in state.estimates_revealed:
-                        state.estimates_revealed.remove(pid)
-                    if pid in state.estimates:
-                        del state.estimates[pid]
-                    broadcast_state()
-                    refresh_estimates_display()
-                    estimates_column.update()
-                return ft.IconButton(
-                    ft.Icons.LOCK_OPEN,
-                    tooltip="Entsperren",
-                    on_click=unlock,
-                    icon_size=16,
-                    visible=locked,
-                )
-
-            rows.append(ft.Row(
-                controls=[
-                    lock_icon,
-                    ft.Text(p.name, weight=ft.FontWeight.BOLD, width=120),
-                    answer_text,
-                    make_reveal_btn(p.player_id, is_locked, is_revealed),
-                    make_unlock_btn(p.player_id, is_locked),
-                ],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ))
-        estimates_column.controls = rows
-
-    # -------------------------------------------------------------------------
-    # Prompt / media area
-    # -------------------------------------------------------------------------
-    def _build_prompt_area() -> ft.Control:
-        prompt_text = ft.Text(q.prompt, size=22)
-
-        # Asset-Index absichern
-        asset_idx = max(0, min(state.question_asset_index, len(q.assets) - 1)) if q.assets else 0
-        current_asset = q.assets[asset_idx] if q.assets else None
+    def _asset_nav_compact() -> ft.Control | None:
+        if not q.assets or len(q.assets) <= 1:
+            return None
         n_assets = len(q.assets)
+        asset_idx = max(0, min(state.question_asset_index, n_assets - 1))
 
         def _nav_prev(_):
             if state.question_asset_index > 0:
@@ -316,60 +235,60 @@ def question_view(
                 if rebuild_view:
                     rebuild_view()
 
-        def _nav_row() -> ft.Control:
-            return ft.Row(
-                controls=[
-                    ft.IconButton(ft.Icons.ARROW_BACK_IOS_ROUNDED, on_click=_nav_prev,
-                                  disabled=asset_idx == 0, icon_size=20),
-                    ft.Text(f"{asset_idx + 1} / {n_assets}", size=13, opacity=0.7),
-                    ft.IconButton(ft.Icons.ARROW_FORWARD_IOS_ROUNDED, on_click=_nav_next,
-                                  disabled=asset_idx == n_assets - 1, icon_size=20),
-                ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=4,
-            )
+        return ft.Row(
+            controls=[
+                ft.IconButton(ft.Icons.ARROW_BACK_IOS_ROUNDED, on_click=_nav_prev,
+                              disabled=asset_idx == 0, icon_size=18),
+                ft.Text(f"{asset_idx + 1}/{n_assets}", size=12, opacity=0.7),
+                ft.IconButton(ft.Icons.ARROW_FORWARD_IOS_ROUNDED, on_click=_nav_next,
+                              disabled=asset_idx == n_assets - 1, icon_size=18),
+            ],
+            spacing=2,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            tight=True,
+        )
+
+    # -------------------------------------------------------------------------
+    # Media content (ohne Prompt-Text; der kommt als Card-Header)
+    # -------------------------------------------------------------------------
+    def _build_media_content() -> ft.Control | None:
+        asset_idx = max(0, min(state.question_asset_index, len(q.assets) - 1)) if q.assets else 0
+        current_asset = q.assets[asset_idx] if q.assets else None
 
         if q_type == "text":
-            return prompt_text
+            return None
 
         if q_type == "image":
-            controls: list[ft.Control] = [prompt_text]
-            if current_asset:
-                try:
-                    from board_loader import BOARDS_DIR
-                    rel = Path(current_asset).relative_to(BOARDS_DIR)
-                    src = f"/boards/{rel.as_posix()}"
+            if not current_asset:
+                return None
+            try:
+                from board_loader import BOARDS_DIR
+                rel = Path(current_asset).relative_to(BOARDS_DIR)
+                src = f"/boards/{rel.as_posix()}"
 
-                    def _open_zoom(_e, _src=src):
-                        def _close(_):
-                            dlg.open = False
-                            page.update()
-                        dlg = ft.AlertDialog(
-                            content=ft.Image(src=_src, fit=ft.BoxFit.CONTAIN),
-                            content_padding=ft.padding.all(0),
-                            actions=[ft.TextButton("Schließen", on_click=_close)],
-                            open=True,
-                        )
-                        page.overlay.append(dlg)
+                def _open_zoom(_e, _src=src):
+                    def _close(_):
+                        dlg.open = False
                         page.update()
-
-                    controls.append(
-                        ft.GestureDetector(
-                            content=ft.Image(src=src, fit=ft.BoxFit.CONTAIN, height=300),
-                            on_tap=_open_zoom,
-                            mouse_cursor=ft.MouseCursor.ZOOM_IN,
-                        )
+                    dlg = ft.AlertDialog(
+                        content=ft.Image(src=_src, fit=ft.BoxFit.CONTAIN),
+                        content_padding=ft.padding.all(0),
+                        actions=[ft.TextButton("Schließen", on_click=_close)],
+                        open=True,
                     )
-                except Exception as _img_err:
-                    print(f"[Image] Fehler beim Laden: {_img_err!r}  path={current_asset!r}")
-                    controls.append(ft.Text(f"Bild nicht gefunden: {current_asset}", color="error", italic=True))
-            if role == "host" and n_assets > 1:
-                controls.append(_nav_row())
-            return ft.Column(controls=controls, tight=True, spacing=8)
+                    page.overlay.append(dlg)
+                    page.update()
+
+                return ft.GestureDetector(
+                    content=ft.Image(src=src, fit=ft.BoxFit.CONTAIN, height=300),
+                    on_tap=_open_zoom,
+                    mouse_cursor=ft.MouseCursor.ZOOM_IN,
+                )
+            except Exception as _img_err:
+                print(f"[Image] Fehler beim Laden: {_img_err!r}  path={current_asset!r}")
+                return ft.Text(f"Bild nicht gefunden: {current_asset}", color="error", italic=True)
 
         if q_type == "audio":
-            # Audio-URL aus absolutem Pfad berechnen
             audio_src = None
             if current_asset:
                 try:
@@ -382,7 +301,6 @@ def question_view(
             if audio_src and set_question_audio_src:
                 set_question_audio_src(audio_src)
 
-            # Waveform-Balken: Höhen aus Dateinamen-Hash, Farbe = Fortschritt
             _seed = Path(current_asset).name if current_asset else "default"
             _h = hashlib.md5(_seed.encode()).digest()
             base_heights = [8 + (_h[i % len(_h)] % 44) for i in range(24)]
@@ -392,7 +310,7 @@ def question_view(
                 ft.Container(
                     width=5,
                     height=h,
-                    bgcolor="outline",   # unplayed = dunkel
+                    bgcolor="outline",
                     border_radius=2,
                     animate=ft.Animation(80, ft.AnimationCurve.EASE_IN_OUT),
                 )
@@ -423,10 +341,8 @@ def question_view(
                 return f"{s // 60}:{s % 60:02d}"
 
             def _get_duration_ms() -> int | None:
-                """Liest Duration frisch aus dem Cache (int ms, via on_duration_change)."""
                 return get_audio_duration_fn() if get_audio_duration_fn else None
 
-            # Zeitanzeige — Duration evtl. noch nicht da (Test läuft async)
             time_text = ft.Text(
                 "0:00 / --:--",
                 size=12,
@@ -446,10 +362,9 @@ def question_view(
                     pass
 
             async def _run_progress():
-                # Duration frisch lesen; falls Test noch läuft kurz warten
                 duration_ms = _get_duration_ms()
                 if duration_ms is None and get_audio_duration_fn:
-                    for _ in range(15):  # bis zu 3s warten
+                    for _ in range(15):
                         await asyncio.sleep(0.2)
                         duration_ms = _get_duration_ms()
                         if duration_ms is not None:
@@ -469,7 +384,7 @@ def question_view(
                         break
                     pos_ms = None
                     if get_audio_position_fn and duration_ms:
-                        pos_ms = get_audio_position_fn()  # interpoliert, int ms oder None
+                        pos_ms = get_audio_position_fn()
 
                     if pos_ms is not None and duration_ms:
                         fraction = min(1.0, pos_ms / duration_ms)
@@ -485,11 +400,10 @@ def question_view(
                         if fraction >= 1.0:
                             break
 
-                    # Sicherheits-Exit: länger als Duration + 3s aktiv → fertig
                     elapsed_s = time.monotonic() - play_start
                     if duration_ms and elapsed_s * 1000 > duration_ms + 3000:
                         break
-                    if elapsed_s > 600:  # max. 10 Minuten
+                    if elapsed_s > 600:
                         break
 
                     await asyncio.sleep(0.1)
@@ -523,7 +437,6 @@ def question_view(
                 if play_question_audio:
                     play_question_audio()
 
-            # Für Spieler: Playback via PubSub auslösbar machen
             page.session.store.set("_trigger_question_audio", trigger_play)
 
             def on_play_click(_):
@@ -538,7 +451,6 @@ def question_view(
                 if broadcast_question_audio:
                     broadcast_question_audio()
 
-            # Lautstärkeregler — Wert wird in der Session gespeichert (fragenübergreifend)
             _saved_vol = page.session.store.get("_audio_volume")
             try:
                 _current_vol = max(0.0, min(1.0, float(_saved_vol))) if _saved_vol is not None else 1.0
@@ -566,7 +478,7 @@ def question_view(
             )
 
             audio_controls: list[ft.Control] = [
-                prompt_text, waveform_box, time_text, audio_status, volume_row,
+                waveform_box, time_text, audio_status, volume_row,
             ]
 
             if role == "host":
@@ -592,195 +504,274 @@ def question_view(
                         spacing=6,
                     )
                 )
-                if n_assets > 1:
-                    audio_controls.append(_nav_row())
 
-            return ft.Column(controls=audio_controls, tight=True, spacing=8)
+            return ft.Column(controls=audio_controls, tight=True, spacing=8,
+                             horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
         if q_type == "estimate":
-            controls_est: list[ft.Control] = [prompt_text]
-            if role == "player":
-                controls_est.append(ft.Container(height=8))
-                controls_est.append(_build_estimate_input())
-                # Aufgedeckte Antworten anzeigen
-                revealed = [
-                    p for p in state.players
-                    if p.player_id in state.estimates_revealed
-                ]
-                if revealed:
-                    controls_est.append(ft.Divider())
-                    controls_est.append(ft.Text("Aufgedeckte Antworten:", size=13, weight=ft.FontWeight.BOLD))
-                    for p in revealed:
-                        answer = state.estimates.get(p.player_id, "—")
-                        controls_est.append(ft.Row(controls=[
-                            ft.Text(p.name, weight=ft.FontWeight.BOLD, width=140),
-                            ft.Text(answer),
-                        ]))
-            return ft.Column(controls=controls_est, tight=True, spacing=8)
+            return None
 
-        return prompt_text  # fallback
+        return None
 
     # -------------------------------------------------------------------------
-    # Actions
+    # Topbar
     # -------------------------------------------------------------------------
-    def reveal(_):
-        state.question_answer_revealed = True
-        refresh_answer()
-        answer_container.update()
-        broadcast_state()
+    def _build_topbar() -> ft.Control:
+        title_str = f"{cat.title} – {tile.value}"
 
-    def back_without_use(_):
-        page.on_keyboard_event = None
-        state.selected = None
-        state.end_question_round()
-        state.screen = "board"
-        rerender()
-        broadcast_state()
+        if role == "player":
+            return topbar_view(title=title_str)
 
-    def finish_round_and_back():
-        page.on_keyboard_event = None
-        tile.used = True
-        state.selected = None
-        state.end_question_round()
-        state.screen = "board"
-        broadcast_state(include_board=True)  # tile.used hat sich geändert
+        reveal_btn = ft.OutlinedButton("Antwort zeigen", on_click=reveal)
 
-    def host_correct(_):
-        if not caps.can_award_points:
-            return
-        correct_btn.disabled = True
-        correct_btn.update()
-        a = state.players[state.question_answerer_index]
-        a.score += tile.value
-        _play("correct_answer")
-        state.advance_turn()
-        finish_round_and_back()
-        rerender()
+        if q_type == "estimate":
+            reveal_all_btn = ft.FilledTonalButton(
+                "Alle aufdecken",
+                icon=ft.Icons.VISIBILITY,
+                on_click=reveal_all_estimates,
+                visible=caps.can_award_points,
+            )
+            return topbar_view(
+                title=title_str,
+                on_back=back_without_use,
+                back_label="← Zurück",
+                left_extra=reveal_btn,
+                right_control=reveal_all_btn,
+            )
 
-    def host_wrong(_):
-        if not caps.can_award_points:
-            return
-        wrong_btn.disabled = True
-        wrong_btn.update()
-        a = state.players[state.question_answerer_index]
-        a.score -= tile.value
-        _play("wrong_answer")
-        state.open_buzzer()
-        refresh_status()
-        refresh_buzzer_controls()
-        page.update()
-        broadcast_state()
+        # Non-estimate host
+        answerer_idx = max(0, min(state.question_answerer_index, len(state.players) - 1))
+        a = state.players[answerer_idx]
+        correct_btn.text = f"✅ Richtig ({a.name})"
+        wrong_btn.text = f"❌ Falsch ({a.name})"
 
-    correct_btn.on_click = host_correct
-    wrong_btn.on_click = host_wrong
+        right_controls: list[ft.Control] = []
+        if caps.can_award_points:
+            right_controls.extend([correct_btn, wrong_btn])
+        nav = _asset_nav_compact()
+        if nav:
+            right_controls.append(nav)
 
-    # -------------------------------------------------------------------------
-    # Host controls row
-    # -------------------------------------------------------------------------
-    if q_type == "estimate":
-        # For estimate: no correct/wrong per-player; host reveals estimates, then correct answer
-        def reveal_correct_answer(_):
-            state.question_answer_revealed = True
-            refresh_answer()
-            answer_container.update()
-            broadcast_state()
+        right = ft.Row(
+            controls=right_controls,
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            tight=True,
+        ) if right_controls else None
 
-        def reveal_all_estimates(_):
-            for p in state.players:
-                if p.player_id in state.estimates_locked and p.player_id not in state.estimates_revealed:
-                    state.estimates_revealed.append(p.player_id)
-            broadcast_state()
-            refresh_estimates_display()
-            estimates_column.update()
-
-        host_action_row = ft.Row(
-            controls=[
-                ft.FilledTonalButton("Alle aufdecken", icon=ft.Icons.VISIBILITY, on_click=reveal_all_estimates),
-                ft.OutlinedButton("Antwort zeigen", on_click=reveal_correct_answer),
-                ft.TextButton("Zurück (ohne verbrauchen)", on_click=back_without_use),
-            ],
-            wrap=True,
+        return topbar_view(
+            title=title_str,
+            on_back=back_without_use,
+            back_label="← Zurück",
+            left_extra=reveal_btn,
+            right_control=right,
         )
 
-        # Award-point buttons per player for estimate resolution
-        def _make_award_btn(player_index: int) -> ft.Control:
-            p = state.players[player_index]
+    # -------------------------------------------------------------------------
+    # Player cards row (replaces status strip + buzzer holder)
+    # -------------------------------------------------------------------------
+    def _build_player_cards_row() -> ft.Container:
+        MIN_PLAYER_W = 180
+        PLAYER_GAP = 8
+        my_player_id = page.session.store.get("player_id") or ""
+        answerer_idx = max(0, min(state.question_answerer_index, len(state.players) - 1))
 
-            btn = ft.OutlinedButton(f"🏆 {p.name} gewinnt")
+        players_content = ft.Column()
 
-            def award(e, _b=btn, _pi=player_index):
-                _b.disabled = True
-                _b.update()
-                state.players[_pi].score += tile.value
-                state.question_answerer_index = _pi
-                finish_round_and_back()
-                rerender()
-
-            btn.on_click = award
-            return btn
-
-        award_buttons = ft.Row(
-            controls=[_make_award_btn(i) for i in range(len(state.players))],
-            wrap=True,
-        )
-
-        host_controls = ft.Container(
-            visible=caps.can_award_points,
-            content=ft.Column(
-                controls=[
-                    ft.Text("Host-Steuerung", weight=ft.FontWeight.BOLD),
-                    host_action_row,
-                    ft.Container(height=4),
-                    ft.Text("Schätzungen der Spieler:", size=13, weight=ft.FontWeight.BOLD),
-                    estimates_column,
-                    ft.Container(height=8),
-                    ft.Text("Punkte vergeben:", size=13),
-                    award_buttons,
-                ],
-                tight=True,
-                spacing=6,
-            ),
-        )
-    else:
-        host_controls = ft.Container(
-            visible=caps.can_award_points,
-            content=ft.Column(
-                controls=[
-                    ft.Text("Host-Steuerung", weight=ft.FontWeight.BOLD),
-                    ft.Row(
-                        controls=[
-                            ft.OutlinedButton("Antwort zeigen", on_click=reveal),
-                            ft.TextButton("Zurück (ohne verbrauchen)", on_click=back_without_use),
-                        ],
-                        wrap=True,
-                    ),
-                    ft.Row(controls=[correct_btn, wrong_btn], wrap=True),
-                ],
-                tight=True,
-                spacing=8,
+        outer = ft.Container(
+            padding=8,
+            border=ft.Border.all(1, color="outline"),
+            border_radius=12,
+            bgcolor="surface_container",
+            content=ft.Row(
+                controls=[players_content],
+                scroll=ft.ScrollMode.AUTO,
             ),
         )
 
+        def build_cards_row(card_width: int) -> ft.Row:
+            cards = []
+            for i, p in enumerate(state.players):
+                body = None
+                footer = None
+                highlight = None
+
+                if q_type == "estimate":
+                    if role == "player":
+                        if p.player_id == my_player_id:
+                            body = _build_estimate_input()
+                        else:
+                            # Andere Karten: aufgedeckte Antwort zeigen falls vorhanden
+                            if p.player_id in state.estimates_revealed:
+                                answer = state.estimates.get(p.player_id, "—")
+                                body = ft.Container(
+                                    alignment=ft.Alignment.CENTER,
+                                    content=ft.Text(answer, size=13, text_align=ft.TextAlign.CENTER),
+                                    padding=ft.padding.symmetric(horizontal=4),
+                                )
+                    elif role == "host":
+                        answer = state.estimates.get(p.player_id, "")
+                        is_locked = p.player_id in state.estimates_locked
+                        is_revealed = p.player_id in state.estimates_revealed
+
+                        lock_icon = ft.Icon(
+                            ft.Icons.LOCK if is_locked else ft.Icons.LOCK_OPEN,
+                            size=14,
+                            color="tertiary" if is_locked else "outline",
+                        )
+                        display = answer if answer else "—"
+                        body = ft.Row(
+                            controls=[
+                                lock_icon,
+                                ft.Text(display, size=12, expand=True,
+                                        italic=not is_locked, text_align=ft.TextAlign.CENTER),
+                            ],
+                            spacing=4,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        )
+
+                        def make_reveal_btn(pid, locked, revealed):
+                            def reveal_one(_):
+                                if pid not in state.estimates_revealed:
+                                    state.estimates_revealed.append(pid)
+                                broadcast_state()
+                                if rebuild_view:
+                                    rebuild_view()
+                            return ft.TextButton(
+                                "Aufdecken",
+                                on_click=reveal_one,
+                                disabled=not locked or revealed,
+                                style=ft.ButtonStyle(padding=ft.padding.all(2)),
+                            )
+
+                        def make_unlock_btn(pid, locked):
+                            def unlock(_):
+                                if pid in state.estimates_locked:
+                                    state.estimates_locked.remove(pid)
+                                if pid in state.estimates_revealed:
+                                    state.estimates_revealed.remove(pid)
+                                if pid in state.estimates:
+                                    del state.estimates[pid]
+                                broadcast_state()
+                                if rebuild_view:
+                                    rebuild_view()
+                            return ft.IconButton(
+                                ft.Icons.LOCK_OPEN,
+                                tooltip="Entsperren",
+                                on_click=unlock,
+                                icon_size=14,
+                                visible=locked,
+                            )
+
+                        def make_award_btn(_pi=i):
+                            def award(_):
+                                state.players[_pi].score += tile.value
+                                state.question_answerer_index = _pi
+                                _play("correct_answer")
+                                finish_round_and_back()
+                                rerender()
+                            return ft.TextButton(
+                                "🏆 gewinnt",
+                                on_click=award,
+                                style=ft.ButtonStyle(padding=ft.padding.all(2)),
+                            )
+
+                        footer = [
+                            make_reveal_btn(p.player_id, is_locked, is_revealed),
+                            make_unlock_btn(p.player_id, is_locked),
+                            make_award_btn(),
+                        ]
+                else:
+                    # Non-estimate: Buzz-Button für eigene Karte des Spielers
+                    if role == "player" and p.player_id == my_player_id:
+                        my_idx = next(
+                            (j for j, pl in enumerate(state.players) if pl.player_id == my_player_id), -1
+                        )
+                        if state.buzzer_open and my_idx != answerer_idx:
+                            buzz_btn = ft.FilledButton("Buzz!  [Space]", width=160)
+
+                            def send_buzz(_=None, _btn=buzz_btn):
+                                _btn.disabled = True
+                                try:
+                                    _btn.update()
+                                except Exception:
+                                    pass
+                                lobby_id = page.session.store.get("lobby_id") or ""
+                                pid = page.session.store.get("player_id") or ""
+                                msg = json.dumps({
+                                    "type": "player_buzz",
+                                    "lobby_id": lobby_id,
+                                    "player_id": pid,
+                                })
+                                _play("buzz")
+                                page.pubsub.send_all(msg)
+                                page.on_keyboard_event = None
+
+                            buzz_btn.on_click = send_buzz
+
+                            def on_key(e: ft.KeyboardEvent):
+                                if e.key == " ":
+                                    send_buzz()
+
+                            page.on_keyboard_event = on_key
+                            body = ft.Container(
+                                alignment=ft.Alignment.CENTER,
+                                content=buzz_btn,
+                                padding=ft.padding.symmetric(vertical=8),
+                            )
+                        else:
+                            page.on_keyboard_event = None
+
+                    # Aktiver Antworter: blauer Rahmen
+                    if i == answerer_idx:
+                        highlight = "primary"
+
+                card = PlayerCard(
+                    name=p.name,
+                    score=p.score,
+                    is_active=(i == answerer_idx) if q_type != "estimate" else p.is_turn,
+                    body_content=body,
+                    footer_controls=footer,
+                    highlight_color=highlight,
+                )
+                card.width = card_width
+                card.height = round(card_width * 9 / 16)
+                cards.append(card)
+
+            return ft.Row(controls=cards, spacing=PLAYER_GAP, expand=1)
+
+        def recompute(viewport_w: int, pad: int):
+            state.ensure_players()
+            n = max(1, len(state.players))
+            usable = viewport_w - 2 * pad - 2 * 8 - 2 - 2
+            gaps = (n - 1) * PLAYER_GAP
+            card_w = max(MIN_PLAYER_W, math.floor((usable - gaps) / n))
+            players_content.controls = [build_cards_row(card_w)]
+
+        recompute(page.width or 1200, LAYOUT.page_padding)
+        outer.data = {"recompute": recompute}
+        return outer
+
     # -------------------------------------------------------------------------
-    # Status strip (hidden for estimate)
+    # Assembly
     # -------------------------------------------------------------------------
-    status_strip = ft.Container(
-        visible=(q_type != "estimate"),
-        padding=10,
-        border=ft.Border.all(1, color="outline"),
-        border_radius=12,
-        bgcolor="surface_container",
-        content=ft.Row(
-            controls=[
-                ft.Text("Antwortet:", weight=ft.FontWeight.BOLD),
-                answerer_name_text,
-                buzzer_state_text,
-            ],
-            wrap=True,
+    refresh_answer()
+
+    _media = _build_media_content()
+    _card_controls: list[ft.Control] = [
+        ft.Container(
+            alignment=ft.Alignment.CENTER,
+            padding=ft.padding.only(bottom=2),
+            content=ft.Text(q.prompt, size=22, text_align=ft.TextAlign.CENTER),
         ),
-    )
-
-    topbar = topbar_view(title="Frage")
+        ft.Divider(height=1, color="outline", thickness=1),
+    ]
+    if _media is not None:
+        _card_controls.append(
+            ft.Container(alignment=ft.Alignment.CENTER, content=_media, expand=True)
+        )
+    _card_controls.append(ft.Container(height=6))
+    _card_controls.append(answer_container)
 
     card = ft.Container(
         padding=16,
@@ -788,37 +779,32 @@ def question_view(
         border_radius=12,
         bgcolor="surface_container",
         content=ft.Column(
-            controls=[
-                ft.Text(f"{cat.title} – {tile.value}", size=18, weight=ft.FontWeight.BOLD),
-                ft.Divider(),
-                _build_prompt_area(),
-                ft.Container(height=10),
-                answer_container,
-                ft.Container(height=10),
-                host_controls,
-            ],
+            controls=_card_controls,
             tight=True,
             spacing=8,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         ),
+        expand=True,
     )
 
-    # Initial fill
-    refresh_answer()
-    if q_type != "estimate":
-        refresh_status()
-        refresh_buzzer_controls()
-    else:
-        refresh_estimates_display()
+    player_row = _build_player_cards_row()
+
+    def on_resize(_):
+        fn = (player_row.data or {}).get("recompute")
+        if callable(fn):
+            fn(page.width or 1200, LAYOUT.page_padding)
+        page.update()
+
+    page.on_resize = on_resize
 
     return ft.Column(
         controls=[
-            topbar,
-            ft.Container(height=10),
-            status_strip,
-            ft.Container(height=10),
+            _build_topbar(),
+            ft.Container(height=8),
             card,
-            ft.Container(height=10),
-            buzzer_holder,
+            ft.Container(height=8),
+            player_row,
         ],
         expand=True,
+        spacing=0,
     )

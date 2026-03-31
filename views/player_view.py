@@ -14,7 +14,6 @@ def player_view(page: ft.Page, state: AppState, broadcast_state, *, can_select_t
     players_content = ft.Column()
 
     host = ft.Container(
-        expand=1,
         padding=8,
         border=ft.Border.all(1, color="outline"),
         border_radius=12,
@@ -45,6 +44,7 @@ def player_view(page: ft.Page, state: AppState, broadcast_state, *, can_select_t
                 on_select=select_turn if can_select_turn else None,
             )
             c.width = card_width
+            c.height = round(card_width * 9 / 16)
             c.expand = 1
             cards.append(c)
 
