@@ -232,6 +232,19 @@ def setup_router(page: ft.Page, state: AppState):
     def rerender():
         push_route(page, _route_for_screen(page, state.screen))
 
+    def rebuild_current_view():
+        """Baut den aktuellen View direkt neu – ohne Route-Wechsel.
+        Nötig wenn die Route gleich bleibt (z.B. question_asset_index ändern)."""
+        async def _do():
+            page.views.clear()
+            page.views.append(
+                ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
+            )
+            _apply_pending_audio()
+            page.update()
+        if page.session and page.session.connection:
+            page.run_task(_do)
+
     def _build_screen_control() -> ft.Control:
         page.on_keyboard_event = None  # Cleanup bei jedem Screen-Wechsel
         role = _get_role(page)
@@ -262,6 +275,7 @@ def setup_router(page: ft.Page, state: AppState):
                 get_audio_duration_fn=lambda: _q_audio_duration[0],
                 get_audio_position_fn=get_audio_position,
                 set_audio_volume_fn=set_audio_volume,
+                rebuild_view=rebuild_current_view,
             )
 
         return ft.Text(f"Unbekannter Screen: {state.screen}")

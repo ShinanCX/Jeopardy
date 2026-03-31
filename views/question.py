@@ -29,6 +29,7 @@ def question_view(
     get_audio_duration_fn=None,
     get_audio_position_fn=None,
     set_audio_volume_fn=None,
+    rebuild_view=None,
 ) -> ft.Control:
     # Guard rails
     if state.board is None or state.selected is None:
@@ -305,13 +306,15 @@ def question_view(
             if state.question_asset_index > 0:
                 state.question_asset_index -= 1
                 broadcast_state()
-                rerender()
+                if rebuild_view:
+                    rebuild_view()
 
         def _nav_next(_):
             if state.question_asset_index < n_assets - 1:
                 state.question_asset_index += 1
                 broadcast_state()
-                rerender()
+                if rebuild_view:
+                    rebuild_view()
 
         def _nav_row() -> ft.Control:
             return ft.Row(
