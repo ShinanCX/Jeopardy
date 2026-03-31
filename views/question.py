@@ -185,6 +185,18 @@ def question_view(
             read_only=is_locked,
         )
 
+        def on_estimate_change(e):
+            if is_locked:
+                return
+            page.pubsub.send_all(json.dumps({
+                "type": "player_estimate",
+                "lobby_id": lobby_id,
+                "player_id": my_player_id,
+                "answer": e.data,
+            }))
+
+        est_field.on_change = on_estimate_change
+
         def lock_in(_):
             answer = est_field.value.strip()
             if not answer:

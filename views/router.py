@@ -534,6 +534,25 @@ def setup_router(page: ft.Page, state: AppState):
                     page.run_task(_refresh_question)
             return
 
+        if msg_type == "player_estimate" and _get_role(page) == "host":
+            player_id = msg.get("player_id", "")
+            answer = msg.get("answer", "")
+            # Nur updaten wenn noch nicht eingeloggt (Lock bleibt erhalten)
+            if player_id and player_id not in state.estimates_locked:
+                state.estimates[player_id] = answer
+
+            async def _refresh_live():
+                page.views.clear()
+                page.views.append(
+                    ft.View(route=page.route, controls=[_build_screen_control()], padding=LAYOUT.page_padding)
+                )
+                _apply_pending_audio()
+                page.update()
+
+            if page.session and page.session.connection:
+                page.run_task(_refresh_live)
+            return
+
         if msg_type == "player_estimate_lock" and _get_role(page) == "host":
             player_id = msg.get("player_id", "")
             answer = msg.get("answer", "")
